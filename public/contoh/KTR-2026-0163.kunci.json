@@ -1,0 +1,41 @@
+{
+  "medan": {
+    "nomor_kontrak": "KTR/2026/0163",
+    "nama_vendor": "PT Bahari Nusantara Teknik",
+    "nilai_kontrak": "Rp12.400.000.000",
+    "lingkup_pekerjaan": "Konstruksi Tangki Timbun Samarinda",
+    "komitmen_tkdn": "38%",
+    "tarif_denda_harian": "1/1000 dari nilai kontrak per hari",
+    "batas_maksimum_denda": "10% dari nilai kontrak",
+    "jumlah_termin": "5 termin",
+    "tanggal_mulai": "20 April 2026",
+    "tanggal_berakhir": "5 Oktober 2026"
+  },
+  "termin": [
+    {
+      "urutan": 1,
+      "nilai": "Rp1.860.000.000",
+      "jatuh_tempo": "30 Mei 2026"
+    },
+    {
+      "urutan": 2,
+      "nilai": "Rp2.480.000.000",
+      "jatuh_tempo": "28 Juni 2026"
+    },
+    {
+      "urutan": 3,
+      "nilai": "Rp3.100.000.000",
+      "jatuh_tempo": "31 Juli 2026"
+    },
+    {
+      "urutan": 4,
+      "nilai": "Rp3.100.000.000",
+      "jatuh_tempo": "30 Agustus 2026"
+    },
+    {
+      "urutan": 5,
+      "nilai": "Rp1.860.000.000",
+      "jatuh_tempo": "20 Oktober 2026"
+    }
+  ]
+}

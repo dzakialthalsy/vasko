@@ -1,0 +1,31 @@
+{
+  "medan": {
+    "nomor_kontrak": "KTR/2026/0142",
+    "nama_vendor": "PT Sumber Jaya Abadi",
+    "nilai_kontrak": "Rp4.850.000.000",
+    "lingkup_pekerjaan": "Pemeliharaan Terminal BBM Balikpapan",
+    "komitmen_tkdn": "42%",
+    "tarif_denda_harian": "1/1000 dari nilai kontrak per hari",
+    "batas_maksimum_denda": "5% dari nilai kontrak",
+    "jumlah_termin": "3 termin",
+    "tanggal_mulai": "15 Maret 2026",
+    "tanggal_berakhir": "12 September 2026"
+  },
+  "termin": [
+    {
+      "urutan": 1,
+      "nilai": "Rp1.455.000.000",
+      "jatuh_tempo": "25 Mei 2026"
+    },
+    {
+      "urutan": 2,
+      "nilai": "Rp1.940.000.000",
+      "jatuh_tempo": "9 Agustus 2026"
+    },
+    {
+      "urutan": 3,
+      "nilai": "Rp1.455.000.000",
+      "jatuh_tempo": "19 September 2026"
+    }
+  ]
+}

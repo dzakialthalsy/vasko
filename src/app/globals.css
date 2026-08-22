@@ -1,26 +1,55 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Token warna VASKO.
+   Diambil langsung dari piksel wireframe Stitch supaya aplikasi dan
+   rancangan tidak berbeda. Jangan mengubah nilainya tanpa memperbarui
+   wireframe, karena keenam layar memakai palet yang sama.
+
+   navy    : sidebar, judul, teks utama
+   teal    : dihitung sistem, status aman, aksi utama
+   ungu    : dinilai manusia, penanda verifikasi
+   amber   : keluaran AI yang menunggu konfirmasi, status perhatian
+   merah   : status kritis                                              */
+
+@theme {
+  --color-navy-900: #001f3f;
+  --color-navy-800: #012040;
+  --color-navy-700: #1b3a5b;
+
+  --color-teal-700: #006a6a;
+  --color-teal-50: #eafcfc;
+  --color-teal-25: #f5fefe;
+
+  --color-plum-700: #46265b;
+
+  --color-amber-500: #f0b429;
+  --color-amber-700: #b7791f;
+  --color-amber-50: #fef8ea;
+
+  --color-danger-600: #ba1a1a;
+
+  --color-canvas: #f4fbfa;
+  --color-line: #e8efee;
+  --color-muted: #91a1ac;
+
+  --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-navy-900);
+  font-family: var(--font-sans);
+}
+
+/* Lebar sidebar dipakai di beberapa tempat, jadi disimpan sebagai satu
+   sumber kebenaran. Jebakan paling sering pada rancangan ini adalah konten
+   menyelinap ke bawah sidebar. */
+:root {
+  --sidebar-w: 224px;
 }

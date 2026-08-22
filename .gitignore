@@ -30,8 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# Berkas rahasia. Kunci API dan alamat basis data ada di .env.local dan tidak
+# boleh pernah masuk ke repositori. Yang dibagikan hanya contohnya, yang berisi
+# nama variabel tanpa nilai.
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +42,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Klien Prisma hasil pembangkitan, sekitar 9 MB. Dibuat ulang oleh
+# "prisma generate" yang berjalan otomatis lewat postinstall.
+/src/generated
+
+# Salinan worker pdf.js dari node_modules, sekitar 1,2 MB. Disalin ulang oleh
+# postinstall supaya versinya selalu sama dengan pdfjs-dist yang terpasang.
+# Menyimpannya di repositori membuat keduanya bisa berbeda versi diam-diam,
+# dan pdf.js menolak bekerja bila itu terjadi.
+/public/pdf.worker.min.mjs
+
+# Berkas PDF kontrak yang diunggah pengguna. Isinya data operasional, bukan
+# bagian dari kode. Direktorinya dibuat sendiri saat kontrak pertama disimpan.
+/data
+
+# Potret layar hasil skrip potret.ts, dipakai untuk membandingkan tampilan
+# dengan rancangan. Dibuat ulang kapan saja, tidak perlu ikut versi.
+/potret

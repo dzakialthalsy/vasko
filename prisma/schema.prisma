@@ -1,0 +1,195 @@
+// Skema basis data VASKO.
+// Mengikuti Tabel 3.2 Arsitektur: basis data relasional tunggal yang dipakai
+// bersama modul D10 Kontrak, D7 Kepatuhan TKDN, dan D11 Performa Vendor.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 tidak lagi menerima `url` di sini. Alamat sambungan dipindah ke
+// prisma.config.ts untuk Migrate, dan diberikan lewat driver adapter saat
+// PrismaClient dibuat. Lihat src/lib/prisma.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- vendor
+
+model Vendor {
+  id             String     @id @default(cuid())
+  nama           String
+  npwp           String?
+  alamat         String?
+  klasifikasi    String?
+  terdaftarSejak Int?
+  kontrak        Kontrak[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@map("vendor")
+}
+
+// ---------------------------------------------------------------- kontrak
+
+enum StatusKontrak {
+  DRAF
+  BERJALAN
+  SELESAI
+  DIPUTUS
+}
+
+model Kontrak {
+  id       String        @id @default(cuid())
+  nomor    String        @unique
+  judul    String
+  status   StatusKontrak @default(DRAF)
+  vendor   Vendor?       @relation(fields: [vendorId], references: [id])
+  vendorId String?
+
+  // Medan yang diisi dari hasil ekstraksi, setelah dikonfirmasi manusia.
+  nilaiKontrak    Decimal? @db.Decimal(18, 2)
+  komitmenTkdn    Decimal? @db.Decimal(5, 2)
+  tarifDendaHarian String?
+  batasMaksDenda  Decimal? @db.Decimal(5, 2)
+  jumlahTermin    Int?
+  tanggalMulai    DateTime?
+  tanggalBerakhir DateTime?
+
+  // Berkas PDF sumber.
+  namaBerkas   String?
+  jumlahHalaman Int?
+
+  ekstraksi Ekstraksi[]
+  termin    Termin[]
+  amendemen Amendemen[]
+  progres   Progres[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("kontrak")
+}
+
+// ------------------------------------------------- hasil ekstraksi AI
+
+// Satu baris per unggahan. Menyimpan seluruh medan hasil ekstraksi beserta
+// posisi sorotannya, sehingga panel kanan dan sorotan PDF berasal dari
+// sumber yang sama.
+model Ekstraksi {
+  id        String   @id @default(cuid())
+  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId String
+
+  model       String
+  selesaiPada DateTime?
+  galat       String?
+
+  medan     MedanEkstraksi[]
+  createdAt DateTime         @default(now())
+
+  @@map("ekstraksi")
+}
+
+// Kelompok medan mengikuti struktur dokumen kontrak Pertamina.
+enum KelompokMedan {
+  POKOK_PERJANJIAN
+  LAMPIRAN_B
+  LAMPIRAN_C
+  LAMPIRAN_D
+}
+
+model MedanEkstraksi {
+  id          String    @id @default(cuid())
+  ekstraksi   Ekstraksi @relation(fields: [ekstraksiId], references: [id], onDelete: Cascade)
+  ekstraksiId String
+
+  urutan   Int
+  kunci    String
+  label    String
+  kelompok KelompokMedan
+  nilai    String?
+
+  // Keyakinan dihitung dari kualitas kecocokan nilai terhadap teks PDF,
+  // bukan angka yang dilaporkan sendiri oleh model. Rentang 0 sampai 1.
+  keyakinan Float @default(0)
+
+  // Medan bernilai uang atau tanggal kritis wajib dikonfirmasi manusia
+  // sebelum kontrak boleh disimpan ke repositori.
+  wajibKonfirmasi Boolean   @default(false)
+  dikonfirmasi    Boolean   @default(false)
+  dikonfirmasiPada DateTime?
+  nilaiSuntingan  String?
+
+  sorotan Sorotan[]
+
+  @@unique([ekstraksiId, kunci])
+  @@map("medan_ekstraksi")
+}
+
+// Kotak batas hasil pencocokan nilai ke daftar kata pada PDF.
+// Koordinat disimpan dalam satuan titik PDF, titik asal di kiri bawah,
+// sehingga bebas dari skala tampilan di peramban.
+model Sorotan {
+  id      String         @id @default(cuid())
+  medan   MedanEkstraksi @relation(fields: [medanId], references: [id], onDelete: Cascade)
+  medanId String
+
+  halaman Int
+  x       Float
+  y       Float
+  lebar   Float
+  tinggi  Float
+
+  @@map("sorotan")
+}
+
+// ---------------------------------------------------- pelaksanaan kontrak
+
+enum StatusTermin {
+  MENUNGGU
+  JATUH_TEMPO
+  DIBAYAR
+}
+
+model Termin {
+  id        String   @id @default(cuid())
+  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId String
+
+  urutan     Int
+  nilai      Decimal      @db.Decimal(18, 2)
+  syarat     String
+  jatuhTempo DateTime
+  status     StatusTermin @default(MENUNGGU)
+
+  @@unique([kontrakId, urutan])
+  @@map("termin")
+}
+
+model Amendemen {
+  id        String   @id @default(cuid())
+  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId String
+
+  versi     Int
+  tanggal   DateTime
+  ringkasan String
+  aktif     Boolean  @default(false)
+
+  @@unique([kontrakId, versi])
+  @@map("amendemen")
+}
+
+model Progres {
+  id        String   @id @default(cuid())
+  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId String
+
+  tanggal     DateTime
+  keterangan  String
+  selesai     Boolean  @default(false)
+  persenTotal Int?
+
+  @@map("progres")
+}
