@@ -83,3 +83,128 @@ function bentukTanggal(tahun: number, bulan: number, hari: number): Date | null 
 export function keSlug(nomor: string): string {
   return nomor.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
+
+// ------------------------------------------------------------------
+// Penguraian untuk medan yang diperiksa oleh validasi kontrak.
+//
+// Pola yang sama dengan di atas: model hanya menyalin frasa dari dokumen,
+// kode yang menafsirkannya. Semuanya mengembalikan null bila frasanya tidak
+// dikenali, jadi pemeriksaan yang bergantung padanya dilewati, bukan salah.
+
+/**
+ * Angka berformat Indonesia atau Inggris menjadi number.
+ * "1.455.000" menjadi 1455000, "10,5" menjadi 10.5, "1,455,000" menjadi 1455000.
+ */
+export function uraiAngka(v: string | null): number | null {
+  if (!v) return null;
+  const m = v.match(/-?\d[\d.,]*/);
+  if (!m) return null;
+  let s = m[0].replace(/[.,]+$/, "");
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
+    s = s.replace(/,/g, "");
+  } else {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+const PPN = String.raw`(?:ppn|pajak\s+pertambahan\s+nilai)`;
+
+/**
+ * Apakah nilai sudah termasuk PPN, menurut frasa pada pasal nilai kontrak.
+ * "sudah termasuk Pajak Pertambahan Nilai (PPN)" menjadi true, "belum termasuk
+ * PPN" menjadi false, frasa tanpa PPN menjadi null.
+ */
+export function uraiTermasukPpn(v: string | null): boolean | null {
+  if (!v) return null;
+  const t = v.toLowerCase();
+  if (!new RegExp(PPN).test(t)) return null;
+  // Yang negatif diperiksa lebih dulu, sebab "tidak termasuk" memuat "termasuk".
+  if (new RegExp(String.raw`(belum|tidak|di\s*luar|tanpa|exclude|eksklusif)\s+(?:termasuk\s+)?(?:\w+\s+){0,2}${PPN}`).test(t)) return false;
+  if (new RegExp(String.raw`(sudah|telah|termasuk|include|inklusif)\s+(?:\w+\s+){0,2}${PPN}`).test(t)) return true;
+  return null;
+}
+
+/** Tarif denda per hari dalam permil. "1/1000 dari nilai kontrak per hari" menjadi 1. */
+export function uraiTarifPermil(v: string | null): number | null {
+  if (!v) return null;
+  const pecahan = v.match(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/);
+  if (pecahan) {
+    const a = Number(pecahan[1].replace(",", "."));
+    const b = Number(pecahan[2].replace(",", "."));
+    if (Number.isFinite(a) && Number.isFinite(b) && b > 0) return Math.round((1000 * a / b) * 10000) / 10000;
+  }
+  const permil = v.match(/(\d+(?:[.,]\d+)?)\s*(?:‰|permil|per\s*mil|per\s*seribu)/i);
+  if (permil) {
+    const n = Number(permil[1].replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export type DasarDenda = "SEBELUM_PPN" | "SESUDAH_PPN";
+
+/** Dasar nilai untuk menghitung denda: sebelum atau sesudah PPN. */
+export function uraiDasarDenda(v: string | null): DasarDenda | null {
+  if (!v) return null;
+  const t = v.toLowerCase();
+  if (!new RegExp(PPN).test(t)) return null;
+  if (new RegExp(String.raw`(sebelum|belum\s+termasuk|tidak\s+termasuk|di\s*luar|tanpa)\s+(?:\w+\s+){0,2}${PPN}`).test(t)) {
+    return "SEBELUM_PPN";
+  }
+  if (new RegExp(String.raw`(setelah|sesudah|termasuk|dengan)\s+(?:\w+\s+){0,2}${PPN}`).test(t)) {
+    return "SESUDAH_PPN";
+  }
+  return null;
+}
+
+export type MasaBerlakuJaminan =
+  /** "14 hari kalender setelah serah terima akhir". Bulan dihitung 30 hari. */
+  | { jenis: "SETELAH_SELESAI"; hari: number; perkiraan: boolean }
+  /** "sampai dengan 12 Oktober 2026". */
+  | { jenis: "TANGGAL"; tanggal: Date };
+
+/**
+ * Masa berlaku Jaminan Pelaksanaan menurut frasa pada pasal jaminan.
+ *
+ * Bentuk relatif ("N hari setelah ...") dihitung dari serah terima akhir
+ * pekerjaan, yang pada kontrak Pertamina berimpit dengan tanggal berakhirnya
+ * pekerjaan. Itu asumsi yang disengaja dan dicatat di sini.
+ */
+export function uraiMasaBerlakuJaminan(v: string | null): MasaBerlakuJaminan | null {
+  if (!v) return null;
+
+  const relatif = v.match(/(\d+)\s*(?:\([^)]*\)\s*)?(hari|bulan)(?:\s+kalender)?\s+(?:setelah|sesudah|sejak|terhitung\s+sejak)/i);
+  if (relatif) {
+    const n = Number(relatif[1]);
+    const bulan = relatif[2].toLowerCase() === "bulan";
+    return { jenis: "SETELAH_SELESAI", hari: bulan ? n * 30 : n, perkiraan: bulan };
+  }
+
+  const tanggal = uraiTanggal(v);
+  if (tanggal) return { jenis: "TANGGAL", tanggal };
+  return null;
+}
+
+/** "60 (enam puluh) hari kalender" menjadi 60. Bulan dihitung 30 hari. */
+export function uraiHari(v: string | null): number | null {
+  if (!v) return null;
+  const hari = v.match(/(\d+)\s*(?:\([^)]*\)\s*)?hari/i);
+  if (hari) return Number(hari[1]);
+  const bulan = v.match(/(\d+)\s*(?:\([^)]*\)\s*)?bulan/i);
+  if (bulan) return Number(bulan[1]) * 30;
+  return null;
+}
+
+/** Selisih hari kalender antara dua tanggal. Positif bila kedua lebih akhir. */
+export function selisihHari(dari: Date, ke: Date): number {
+  return Math.round((ke.getTime() - dari.getTime()) / 86_400_000);
+}
+
+/** Menambah hari kalender pada tanggal UTC. */
+export function tambahHari(tanggal: Date, hari: number): Date {
+  return new Date(tanggal.getTime() + hari * 86_400_000);
+}

@@ -31,6 +31,14 @@ export type DefinisiMedan = {
    */
   wajibKonfirmasi: boolean;
   /**
+   * Nilai medan ini ditafsirkan kode menjadi kolom turunan atau bahan aturan
+   * validasi, sedangkan manusia tidak wajib meninjaunya. Karena itu nilainya
+   * hanya dipakai bila frasanya terbukti ada di teks PDF (keyakinan di atas
+   * nol) atau sudah disunting manusia. Frasa yang tidak ada di PDF, misalnya
+   * karangan model, tetap tersimpan sebagai hasil mentah tetapi diabaikan.
+   */
+  perluBukti?: boolean;
+  /**
    * Perapian deterministik atas nilai yang dikembalikan model.
    *
    * Model yang baik justru setia pada teks dokumen: bila kontrak menulis
@@ -80,6 +88,36 @@ export const MEDAN: DefinisiMedan[] = [
     // Dokumen menulis "Rp4.850.000.000,- (Empat Miliar ...)". Yang disimpan
     // cukup nominalnya, tanpa ekor koma strip dan tanpa terbilang.
     rapikan: (v) => v.match(/Rp\s*[\d.]+\d/)?.[0].replace(/\s+/g, "") ?? null,
+  },
+  // Lima medan berikut dibaca sebagai FRASA, bukan nilai jadi. Frasanya disalin
+  // apa adanya, lalu kode (urai.ts) yang menafsirkannya. Hasil tafsirannya
+  // dipakai pemeriksaan validasi kontrak.
+  {
+    kunci: "nilai_termasuk_ppn",
+    label: "Keterangan PPN pada Nilai Kontrak",
+    kelompok: "POKOK_PERJANJIAN",
+    petunjuk:
+      "Frasa pada pasal nilai kontrak yang menyatakan nilai itu sudah atau belum termasuk Pajak Pertambahan Nilai (PPN), disalin apa adanya. Contoh: sudah termasuk Pajak Pertambahan Nilai (PPN).",
+    wajibKonfirmasi: false,
+    perluBukti: true,
+  },
+  {
+    kunci: "nilai_jaminan_pelaksanaan",
+    label: "Nilai Jaminan Pelaksanaan",
+    kelompok: "POKOK_PERJANJIAN",
+    petunjuk:
+      "Besar Jaminan Pelaksanaan seperti tertulis pada pasal jaminan, contoh 5% dari nilai Perjanjian. Null bila tidak ada pasal jaminan.",
+    wajibKonfirmasi: false,
+    perluBukti: true,
+  },
+  {
+    kunci: "masa_berlaku_jaminan",
+    label: "Masa Berlaku Jaminan Pelaksanaan",
+    kelompok: "POKOK_PERJANJIAN",
+    petunjuk:
+      "Frasa yang menyatakan sampai kapan Jaminan Pelaksanaan berlaku, disalin apa adanya. Contoh: sampai dengan 14 hari kalender setelah serah terima akhir pekerjaan.",
+    wajibKonfirmasi: false,
+    perluBukti: true,
   },
   {
     kunci: "lingkup_pekerjaan",
@@ -132,6 +170,15 @@ export const MEDAN: DefinisiMedan[] = [
     wajibKonfirmasi: true,
   },
   {
+    kunci: "dasar_perhitungan_denda",
+    label: "Dasar Perhitungan Denda",
+    kelompok: "LAMPIRAN_C",
+    petunjuk:
+      "Frasa yang menyatakan dari nilai apa denda dihitung, disalin apa adanya. Contoh: dihitung dari nilai kontrak sebelum Pajak Pertambahan Nilai. Null bila tidak disebut.",
+    wajibKonfirmasi: false,
+    perluBukti: true,
+  },
+  {
     kunci: "jumlah_termin",
     label: "Jumlah Termin",
     kelompok: "LAMPIRAN_C",
@@ -165,7 +212,34 @@ export const MEDAN: DefinisiMedan[] = [
     // "pada tanggal 15 Maret 2026". Yang disimpan cukup tanggalnya.
     rapikan: rapikanTanggal,
   },
+  {
+    kunci: "masa_pemeliharaan",
+    label: "Masa Pemeliharaan",
+    kelompok: "LAMPIRAN_D",
+    petunjuk:
+      "Lamanya masa pemeliharaan, contoh 60 hari kalender. Null bila tidak disebut atau kolomnya masih kosong.",
+    wajibKonfirmasi: false,
+    perluBukti: true,
+  },
 ];
+
+const PERLU_BUKTI = new Set(MEDAN.filter((m) => m.perluBukti).map((m) => m.kunci));
+
+/**
+ * Nilai medan yang boleh dipakai kode: untuk kolom turunan dan aturan validasi.
+ *
+ * Suntingan manusia selalu menang. Untuk medan yang perluBukti, nilai dari
+ * model hanya dipakai bila frasanya ditemukan di teks PDF (keyakinan di atas
+ * nol). Medan lain berperilaku seperti sebelumnya: nilai model dipakai apa adanya.
+ */
+export function nilaiYangDipakai(
+  kunci: string,
+  m: { nilai: string | null; nilaiSuntingan?: string | null; keyakinan: number }
+): string | null {
+  if (m.nilaiSuntingan != null) return m.nilaiSuntingan;
+  if (PERLU_BUKTI.has(kunci) && !(m.keyakinan > 0)) return null;
+  return m.nilai;
+}
 
 export const URUTAN_KELOMPOK: KelompokMedan[] = [
   "POKOK_PERJANJIAN",

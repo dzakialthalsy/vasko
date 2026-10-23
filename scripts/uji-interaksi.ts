@@ -8,6 +8,12 @@
 //   npx tsx scripts/uji-interaksi.ts
 import { chromium } from "playwright";
 import path from "node:path";
+import { MEDAN } from "../src/lib/ekstraksi/medan";
+
+// Jumlah dan nomor medan dihitung dari katalog, bukan ditulis tetap, supaya
+// uji ini tidak rusak setiap kali medan baru ditambahkan.
+const NOMOR_TARIF = MEDAN.findIndex((m) => m.kunci === "tarif_denda_harian") + 1;
+const JUMLAH_WAJIB = MEDAN.filter((m) => m.wajibKonfirmasi).length;
 
 const ALAMAT = "http://localhost:3000/kontrak/unggah";
 const PDF = path.resolve("public/contoh/KTR-2026-0142-Pemeliharaan-Terminal-BBM-Balikpapan.pdf");
@@ -36,7 +42,7 @@ async function main() {
   const sorotanAwal = await page.locator('[title^="Medan "]').count();
   cek("sorotan tampil di halaman 1", sorotanAwal > 0, `${sorotanAwal} kotak`);
 
-  // Medan ke-6 adalah Tarif Denda Harian. Halaman tempatnya bergantung pada
+  // Yang diklik adalah Tarif Denda Harian. Halaman tempatnya bergantung pada
   // kalimat mana yang dipilih model, jadi yang diuji bukan nomor halaman
   // tertentu, melainkan perilakunya: dokumen berpindah, dan sorotan milik
   // medan itu benar-benar tergambar di halaman yang dituju.
@@ -46,19 +52,19 @@ async function main() {
   const halamanSetelah = await nomorHalaman.inputValue();
   cek("klik medan memindahkan dokumen ke halaman lain", halamanSetelah !== "1", `halaman ${halamanSetelah}`);
 
-  const sorotanMedan6 = await page.locator('[title="Medan 6"]').count();
-  cek("sorotan milik medan itu tergambar di halaman tujuan", sorotanMedan6 > 0, `${sorotanMedan6} kotak`);
+  const sorotanMedanTarif = await page.locator(`[title="Medan ${NOMOR_TARIF}"]`).count();
+  cek("sorotan milik medan itu tergambar di halaman tujuan", sorotanMedanTarif > 0, `${sorotanMedanTarif} kotak`);
 
   // --- 2. Tombol Konfirmasi ---
   const bilahHitung = page.locator("text=/dari \\d+ medan menunggu konfirmasi/");
   const teksAwal = await bilahHitung.textContent();
-  cek("penghitung awal menunjukkan 6", teksAwal?.includes("dari 6") ?? false, teksAwal?.trim());
+  cek(`penghitung awal menunjukkan ${JUMLAH_WAJIB}`, teksAwal?.includes(`dari ${JUMLAH_WAJIB}`) ?? false, teksAwal?.trim());
 
   const simpan = page.getByRole("button", { name: /Simpan ke Repositori/ });
   cek("tombol Simpan ke Repositori mula-mula mati", await simpan.isDisabled());
 
   let sisa = await page.getByRole("button", { name: "Konfirmasi" }).count();
-  cek("ada 6 tombol Konfirmasi", sisa === 6, `${sisa} tombol`);
+  cek(`ada ${JUMLAH_WAJIB} tombol Konfirmasi`, sisa === JUMLAH_WAJIB, `${sisa} tombol`);
 
   let langkah = 0;
   while ((await page.getByRole("button", { name: "Konfirmasi" }).count()) > 0 && langkah < 10) {
@@ -66,7 +72,7 @@ async function main() {
     await page.waitForTimeout(120);
     langkah++;
   }
-  cek("seluruh 6 medan terkonfirmasi dalam 6 klik", langkah === 6, `${langkah} klik`);
+  cek(`seluruh ${JUMLAH_WAJIB} medan terkonfirmasi dalam ${JUMLAH_WAJIB} klik`, langkah === JUMLAH_WAJIB, `${langkah} klik`);
 
   const angka = await page.locator("[data-uji=sisa-konfirmasi]").textContent();
   cek("penghitung turun menjadi 0", angka?.trim() === "0", `terbaca ${angka?.trim()}`);
@@ -74,7 +80,7 @@ async function main() {
   cek("tombol Simpan ke Repositori menyala", await simpan.isEnabled());
 
   const centang = await page.getByLabel("Terverifikasi").count();
-  cek("kesepuluh medan bertanda terverifikasi", centang === 10, `${centang} centang`);
+  cek(`seluruh ${MEDAN.length} medan bertanda terverifikasi`, centang === MEDAN.length, `${centang} centang`);
 
   await page.screenshot({ path: "potret/unggah-terkonfirmasi.png" });
   await browser.close();

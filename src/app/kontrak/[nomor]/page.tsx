@@ -10,7 +10,7 @@ import {
   ReceiptText,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { rupiah, tanggal, sisaHari } from "@/lib/format";
+import { rupiah, tanggal, sisaHari, tarifPermilKeTeks } from "@/lib/format";
 import { Chip } from "@/components/ui/Kartu";
 import { ChipStatus, artiStatus } from "@/components/ui/StatusKontrak";
 import { TabsKontrak } from "./TabsKontrak";
@@ -33,6 +33,8 @@ export default async function HalamanDetailKontrak({
       termin: { orderBy: { urutan: "asc" } },
       progres: { orderBy: { tanggal: "asc" } },
       amendemen: { orderBy: { versi: "desc" } },
+      // Berkas kontrak terbaru. Versi lama yang pernah diunggah tidak ditampilkan.
+      dokumen: { where: { jenis: "KONTRAK" }, orderBy: { diunggahPada: "desc" }, take: 1 },
     },
   });
 
@@ -44,14 +46,17 @@ export default async function HalamanDetailKontrak({
     nomor: kontrak.nomor,
     judul: kontrak.judul,
     nilaiKontrak: Number(kontrak.nilaiKontrak ?? 0),
-    komitmenTkdn: Number(kontrak.komitmenTkdn ?? 0),
-    batasMaksDenda: Number(kontrak.batasMaksDenda ?? 5),
-    tarifDendaHarian: kontrak.tarifDendaHarian ?? "1/1000 dari nilai kontrak per hari",
-    jumlahTermin: kontrak.jumlahTermin ?? kontrak.termin.length,
+    komitmenTkdn: Number(kontrak.komitmenTkdnPersen ?? 0),
+    batasMaksDenda: Number(kontrak.batasDendaPersen ?? 5),
+    tarifDendaHarian:
+      kontrak.tarifDendaPermil !== null
+        ? tarifPermilKeTeks(Number(kontrak.tarifDendaPermil))
+        : "1/1000 dari nilai kontrak per hari",
+    jumlahTermin: kontrak.termin.length,
     tanggalMulai: kontrak.tanggalMulai?.toISOString() ?? null,
     tanggalBerakhir: kontrak.tanggalBerakhir?.toISOString() ?? null,
-    namaBerkas: kontrak.namaBerkas,
-    jumlahHalaman: kontrak.jumlahHalaman,
+    namaBerkas: kontrak.dokumen[0]?.namaBerkas ?? null,
+    jumlahHalaman: kontrak.dokumen[0]?.jumlahHalaman ?? null,
     vendor: kontrak.vendor
       ? { nama: kontrak.vendor.nama, npwp: kontrak.vendor.npwp, alamat: kontrak.vendor.alamat }
       : null,

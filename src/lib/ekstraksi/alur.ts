@@ -11,7 +11,7 @@
 
 import { bacaKata, type HalamanPdf } from "@/lib/pdf/kata";
 import { cocokkan, type KotakSorotan } from "@/lib/pdf/cocok";
-import { pilihPenyedia } from "./penyedia";
+import { pilihPenyedia, type Penyedia } from "./penyedia";
 import { ekstrakTiruan, ekstrakTerminTiruan, galatBolehDitiru, ringkasGalat } from "./tiruan";
 import { uraiTermin, periksaTermin, type TerminMentah, type TerminTerurai, type PemeriksaanTermin } from "./termin";
 import { uraiRupiah } from "./urai";
@@ -47,13 +47,17 @@ export type HasilAlur = {
 };
 
 /** Menggabungkan teks per halaman dengan penanda, agar model bisa menyebut halaman. */
-function rangkaiTeks(halaman: HalamanPdf[]): string {
+export function rangkaiTeks(halaman: HalamanPdf[]): string {
   return halaman.map((h) => `=== Halaman ${h.nomor} ===\n${h.teks}`).join("\n\n");
 }
 
 export async function jalankanEkstraksi(
   data: Uint8Array,
-  opsi: { izinkanTiruan?: boolean } = {}
+  opsi: {
+    izinkanTiruan?: boolean;
+    /** Penyedia yang dipakai. Bila kosong dipilih dari .env.local. Dipakai pengujian. */
+    penyedia?: Penyedia;
+  } = {}
 ): Promise<HasilAlur> {
   const t0 = Date.now();
 
@@ -69,7 +73,7 @@ export async function jalankanEkstraksi(
   let alasanTiruan: string | null = null;
 
   try {
-    const penyedia = pilihPenyedia();
+    const penyedia = opsi.penyedia ?? pilihPenyedia();
     const r = await penyedia.ekstrak(teks);
     nilai = r.nilai;
     terminMentah = r.termin;

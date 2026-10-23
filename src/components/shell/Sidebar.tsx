@@ -30,8 +30,8 @@ export function Sidebar() {
     // Ini jebakan yang berulang kali muncul pada rancangan: konten menyelinap
     // ke bawah sidebar. Lebarnya dikunci lewat satu variabel di globals.css.
     <aside
-      className="fixed inset-y-0 left-0 z-30 flex flex-col bg-navy-900 text-white"
-      style={{ width: "var(--sidebar-w)" }}
+      className="fixed inset-y-0 left-0 z-30 flex flex-col text-white"
+      style={{ width: "var(--sidebar-w)", background: "var(--sidebar-bg)" }}
     >
       <div className="px-6 py-7">
         <Link href="/" className="text-2xl font-extrabold tracking-tight">
@@ -47,15 +47,20 @@ export function Sidebar() {
               key={href}
               href={href}
               aria-current={aktif ? "page" : undefined}
+              style={aktif ? { background: "var(--sidebar-aktif)" } : undefined}
               className={[
                 "relative flex items-center gap-3 px-6 py-3.5 text-sm transition-colors",
                 aktif
-                  ? "bg-navy-700/50 font-semibold text-white"
+                  ? "font-semibold text-white"
                   : "text-white/70 hover:bg-white/5 hover:text-white",
               ].join(" ")}
             >
               {aktif && (
-                <span className="absolute inset-y-0 left-0 w-1 bg-teal-700" aria-hidden />
+                <span
+                  className="absolute inset-y-0 left-0 w-1"
+                  style={{ background: "var(--sidebar-indikator)" }}
+                  aria-hidden
+                />
               )}
               <Ikon size={18} strokeWidth={2} aria-hidden />
               {label}

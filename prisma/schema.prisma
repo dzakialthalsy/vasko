@@ -1,6 +1,16 @@
 // Skema basis data VASKO.
-// Mengikuti Tabel 3.2 Arsitektur: basis data relasional tunggal yang dipakai
-// bersama modul D10 Kontrak, D7 Kepatuhan TKDN, dan D11 Performa Vendor.
+//
+// Mengikuti rancangan ERD-Database-VASKO (Oktober 2026), dengan satu basis
+// data relasional tunggal. Cakupan saat ini: akun dan jejak aktivitas,
+// kontrak dan dokumennya, hasil baca AI, validasi kontrak, kendali versi
+// amendemen, dan catatan biaya AI.
+//
+// Tabel Progres tetap ada tetapi DITAHAN, menunggu alur dari FPP. Tabel TKDN
+// belum dibuat karena alasan yang sama.
+//
+// Aturan yang tidak dapat ditulis di sini (CHECK, pemicu append-only pada
+// riwayat aktivitas) ada di berkas migrasi 20261020120000_rancangan_erd.
+// Aturan itu ikut berlaku walau tidak tampak di schema.prisma.
 
 generator client {
   provider = "prisma-client-js"
@@ -14,23 +24,135 @@ datasource db {
   provider = "postgresql"
 }
 
-// ---------------------------------------------------------------- vendor
+// ================================================================ akun
+
+// Fungsi peminta pengadaan (FPP), misalnya DRE, SnD, dan Asset. Daftarnya
+// dikelola Admin karena fungsi baru bisa muncul sewaktu-waktu.
+model Fungsi {
+  id          String  @id @default(cuid())
+  kode        String  @unique
+  namaLengkap String
+  aktif       Boolean @default(true)
+
+  pengguna Pengguna[]
+  kontrak  Kontrak[]
+
+  @@map("fungsi")
+}
+
+enum PeranPengguna {
+  ADMIN
+  PROCUREMENT
+  FPP
+}
+
+// Peran dipakai untuk identitas, catatan aktivitas, dan filter awal. Peran
+// TIDAK dipakai untuk mengunci fitur kontrak. Akun tidak pernah dihapus,
+// hanya dinonaktifkan, supaya riwayatnya tetap ada.
+//
+// Aturan di migrasi: fungsiId wajib terisi untuk peran FPP dan wajib kosong
+// untuk peran lain.
+model Pengguna {
+  id               String        @id @default(cuid())
+  // Restrict, bukan SetNull: aturan di migrasi mewajibkan akun FPP punya fungsi,
+  // jadi menghapus fungsi yang masih dipakai harus ditolak dengan jelas.
+  fungsi           Fungsi?       @relation(fields: [fungsiId], references: [id], onDelete: Restrict)
+  fungsiId         String?
+  nama             String
+  email            String        @unique
+  hashKataSandi    String
+  peran            PeranPengguna
+  aktif            Boolean       @default(true)
+  wajibGantiSandi  Boolean       @default(true)
+  jumlahGagalMasuk Int           @default(0)
+  terkunciSampai   DateTime?
+  terakhirMasuk    DateTime?
+  createdAt        DateTime      @default(now())
+
+  sesi    Sesi[]
+  riwayat RiwayatAktivitas[]
+
+  kontrakDibuat       Kontrak[]        @relation("KontrakDibuatOleh")
+  dokumenDiunggah     Dokumen[]        @relation("DokumenDiunggahOleh")
+  ekstraksiDijalankan Ekstraksi[]      @relation("EkstraksiDijalankanOleh")
+  medanDikonfirmasi   MedanEkstraksi[] @relation("MedanDikonfirmasiOleh")
+  validasiDijalankan  Validasi[]       @relation("ValidasiDijalankanOleh")
+  temuanDiputuskan    Temuan[]         @relation("TemuanDiputuskanOleh")
+  amendemenDibuat     Amendemen[]      @relation("AmendemenDibuatOleh")
+  pemakaianAi         PemakaianAI[]    @relation("PemakaianAiOleh")
+
+  @@index([fungsiId])
+  @@map("pengguna")
+}
+
+model Sesi {
+  id            String   @id @default(cuid())
+  pengguna      Pengguna @relation(fields: [penggunaId], references: [id], onDelete: Cascade)
+  penggunaId    String
+  // Yang disimpan adalah sidik token, bukan tokennya.
+  hashToken     String   @unique
+  terakhirAktif DateTime @default(now())
+  berakhirPada  DateTime
+  alamatIp      String?
+  perangkat     String?
+  createdAt     DateTime @default(now())
+
+  @@index([penggunaId])
+  @@index([berakhirPada])
+  @@map("sesi")
+}
+
+// Catatan siapa melakukan apa. Hanya bisa ditambah: pemicu di migrasi menolak
+// UPDATE dan DELETE. penggunaId boleh kosong untuk kejadian tanpa akun, misalnya
+// percobaan masuk dengan email yang tidak terdaftar.
+model RiwayatAktivitas {
+  id         String    @id @default(cuid())
+  pengguna   Pengguna? @relation(fields: [penggunaId], references: [id])
+  penggunaId String?
+  // Contoh: MASUK, GAGAL_MASUK, UNGGAH_DOKUMEN, JALANKAN_VALIDASI,
+  // PUTUSKAN_TEMUAN, UNGGAH_AMENDEMEN. Daftar lengkapnya ada di
+  // src/lib/aktivitas.ts.
+  aksi       String
+  entitas    String?
+  entitasId  String?
+  rincian    Json?
+  alamatIp   String?
+  waktu      DateTime  @default(now())
+
+  @@index([penggunaId, waktu])
+  @@index([entitas, entitasId])
+  @@index([aksi, waktu])
+  @@map("riwayat_aktivitas")
+}
+
+// ================================================================ vendor
+
+enum GolonganUsaha {
+  KECIL
+  MENENGAH
+  BESAR
+  TANPA
+}
 
 model Vendor {
-  id             String     @id @default(cuid())
-  nama           String
-  npwp           String?
-  alamat         String?
-  klasifikasi    String?
-  terdaftarSejak Int?
-  kontrak        Kontrak[]
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id            String        @id @default(cuid())
+  nama          String
+  npwp          String?       @unique
+  alamat        String?
+  bank          String?
+  nomorRekening String?
+  golonganUsaha GolonganUsaha @default(TANPA)
+  nomorAkta     String?
+  tanggalAkta   DateTime?
+  kontrak       Kontrak[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
+  @@index([nama])
   @@map("vendor")
 }
 
-// ---------------------------------------------------------------- kontrak
+// ================================================================ kontrak
 
 enum StatusKontrak {
   DRAF
@@ -39,64 +161,227 @@ enum StatusKontrak {
   DIPUTUS
 }
 
+enum StatusValidasiKontrak {
+  BELUM
+  VALID
+  BELUM_VALID
+}
+
+enum KategoriAnggaran {
+  // Anggaran Biaya Investasi
+  ABI
+  // Anggaran Biaya Operasi
+  ABO
+}
+
+// Kontrak dan dokumen pendukungnya tidak bisa dihapus (arahan mentor, to-do
+// 59), jadi tidak ada kolom hapus lunak.
+//
+// Aturan di migrasi: nilai dan persentase tidak boleh negatif, tanggal
+// berakhir tidak boleh mendahului tanggal mulai, modelOclc berkisar 1 sampai 11.
 model Kontrak {
-  id       String        @id @default(cuid())
-  nomor    String        @unique
+  id       String  @id @default(cuid())
+  nomor    String  @unique
   judul    String
-  status   StatusKontrak @default(DRAF)
-  vendor   Vendor?       @relation(fields: [vendorId], references: [id])
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
   vendorId String?
+  // FPP pemilik kontrak. Dipakai untuk filter awal dasbor.
+  fungsi   Fungsi? @relation(fields: [fungsiId], references: [id])
+  fungsiId String?
 
-  // Medan yang diisi dari hasil ekstraksi, setelah dikonfirmasi manusia.
-  nilaiKontrak    Decimal? @db.Decimal(18, 2)
-  komitmenTkdn    Decimal? @db.Decimal(5, 2)
-  tarifDendaHarian String?
-  batasMaksDenda  Decimal? @db.Decimal(5, 2)
-  jumlahTermin    Int?
-  tanggalMulai    DateTime?
-  tanggalBerakhir DateTime?
+  // Model kontrak OCLC, 1 sampai 11.
+  modelOclc        Int?
+  kategoriAnggaran KategoriAnggaran?
+  status           StatusKontrak         @default(DRAF)
+  statusValidasi   StatusValidasiKontrak @default(BELUM)
 
-  // Berkas PDF sumber.
-  namaBerkas   String?
-  jumlahHalaman Int?
+  // Nilai yang diisi dari hasil ekstraksi, setelah dikonfirmasi manusia.
+  // nilaiKontrak dan tanggalBerakhir adalah nilai AWAL (KA). Nilai dan tanggal
+  // sesudah amendemen ada pada amendemen yang aktif.
+  nilaiKontrak         Decimal?  @db.Decimal(18, 2)
+  termasukPpn          Boolean?
+  // Tarif denda per hari dalam permil: 1 berarti 1/1000 per hari.
+  tarifDendaPermil     Decimal?  @db.Decimal(8, 4)
+  batasDendaPersen     Decimal?  @db.Decimal(5, 2)
+  nilaiJaminan         Decimal?  @db.Decimal(18, 2)
+  // Bila kontrak menulis masa berlaku jaminan sebagai "N hari setelah serah
+  // terima", tanggalnya dihitung dari tanggal berakhir pekerjaan.
+  jaminanBerlakuSampai DateTime?
+  tanggalMulai         DateTime?
+  tanggalBerakhir      DateTime?
+  masaPemeliharaanHari Int?
+  komitmenTkdnPersen   Decimal?  @db.Decimal(5, 2)
 
-  ekstraksi Ekstraksi[]
+  dibuatOleh   Pengguna? @relation("KontrakDibuatOleh", fields: [dibuatOlehId], references: [id])
+  dibuatOlehId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  dokumen   Dokumen[]
   termin    Termin[]
+  validasi  Validasi[]
   amendemen Amendemen[]
   progres   Progres[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  @@index([vendorId])
+  @@index([fungsiId])
+  @@index([status])
+  @@index([tanggalBerakhir])
   @@map("kontrak")
+}
+
+// ---------------------------------------------------- pelaksanaan kontrak
+
+enum StatusTermin {
+  MENUNGGU
+  JATUH_TEMPO
+  DIBAYAR
+}
+
+model Termin {
+  id        String  @id @default(cuid())
+  kontrak   Kontrak @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId String
+
+  urutan     Int
+  nilai      Decimal      @db.Decimal(18, 2)
+  syarat     String
+  jatuhTempo DateTime
+  status     StatusTermin @default(MENUNGGU)
+
+  @@unique([kontrakId, urutan])
+  @@map("termin")
+}
+
+// DITAHAN. Menunggu alur dan Excel progres dari FPP.
+model Progres {
+  id        String  @id @default(cuid())
+  kontrak   Kontrak @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId String
+
+  tanggal     DateTime
+  keterangan  String
+  selesai     Boolean  @default(false)
+  persenTotal Int?
+
+  @@map("progres")
+}
+
+// ================================================================ dokumen
+
+enum JenisDokumen {
+  KONTRAK
+  PENDUKUNG
+  AMANDEMEN
+  PENDUKUNG_AMANDEMEN
+}
+
+// Bagian kontrak Pertamina: PPJ lalu Lampiran A sampai G. Terisi untuk
+// dokumen berjenis KONTRAK yang diunggah per bagian.
+enum BagianDokumen {
+  PPJ
+  LAMPIRAN_A
+  LAMPIRAN_B
+  LAMPIRAN_C
+  LAMPIRAN_D
+  LAMPIRAN_E
+  LAMPIRAN_F
+  LAMPIRAN_G
+}
+
+enum SumberDokumen {
+  UNGGAH
+  ZIP
+  ONEDRIVE
+}
+
+// Satu baris per berkas. Berkas aslinya disimpan di server, di luar folder
+// public. Tabel hanya menyimpan letak dan sidik berkasnya.
+model Dokumen {
+  id          String     @id @default(cuid())
+  kontrak     Kontrak    @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  kontrakId   String
+  // Terisi bila dokumen ini milik sebuah amendemen.
+  amendemen   Amendemen? @relation(fields: [amendemenId], references: [id], onDelete: SetNull)
+  amendemenId String?
+
+  jenis          JenisDokumen
+  bagian         BagianDokumen?
+  // Jenis dokumen pendukung hasil baca AI, misalnya BA_PREBID atau BOQ.
+  // Katalognya ada di src/lib/dokumen/katalog.ts. Dibuat teks, bukan enum,
+  // karena jenis baru akan terus bertambah dari arahan mentor.
+  jenisPendukung String?
+  judulDokumen   String?
+
+  namaBerkas        String
+  lokasiSimpan      String
+  // SHA-256 isi berkas. Berkas yang sama persis tidak bisa diunggah dua kali
+  // pada kontrak yang sama.
+  hashSha256        String
+  ukuranByte        Int
+  jumlahHalaman     Int?
+  // Salah bila PDF berupa hasil pindai tanpa lapisan teks. VASKO tidak
+  // memakai OCR, jadi berkas seperti itu tidak bisa dibaca.
+  adaLapisanTeks    Boolean       @default(true)
+  // Tanggal yang tertulis di ISI dokumen, bukan tanggal berkas diubah.
+  tanggalDiIsi      DateTime?
+  // Tanggal berkas terakhir diubah, hanya dipakai bila dua dokumen sejenis
+  // bertanggal isi sama.
+  tanggalEditBerkas DateTime?
+  sumber            SumberDokumen @default(UNGGAH)
+
+  diunggahOleh   Pengguna? @relation("DokumenDiunggahOleh", fields: [diunggahOlehId], references: [id])
+  diunggahOlehId String?
+  diunggahPada   DateTime  @default(now())
+
+  ekstraksi      Ekstraksi[]
+  sorotan        Sorotan[]
+  penggunaan     PenggunaanDokumen[] @relation("PenggunaanDokumen")
+  digantikanOleh PenggunaanDokumen[] @relation("DokumenPengganti")
+
+  @@unique([kontrakId, hashSha256])
+  @@index([kontrakId, jenis])
+  @@index([amendemenId])
+  @@map("dokumen")
 }
 
 // ------------------------------------------------- hasil ekstraksi AI
 
-// Satu baris per unggahan. Menyimpan seluruh medan hasil ekstraksi beserta
-// posisi sorotannya, sehingga panel kanan dan sorotan PDF berasal dari
-// sumber yang sama.
+// Satu baris per proses baca atas satu dokumen. Menyimpan seluruh medan hasil
+// ekstraksi beserta posisi sorotannya, sehingga panel kanan dan sorotan PDF
+// berasal dari sumber yang sama.
 model Ekstraksi {
-  id        String   @id @default(cuid())
-  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
-  kontrakId String
+  id        String  @id @default(cuid())
+  dokumen   Dokumen @relation(fields: [dokumenId], references: [id], onDelete: Cascade)
+  dokumenId String
 
-  model       String
-  selesaiPada DateTime?
-  galat       String?
+  model            String
+  dijalankanOleh   Pengguna? @relation("EkstraksiDijalankanOleh", fields: [dijalankanOlehId], references: [id])
+  dijalankanOlehId String?
+  selesaiPada      DateTime?
+  galat            String?
+  // Keluaran terstruktur mentah dari model, termasuk bagian yang tidak punya
+  // kolom sendiri, misalnya daftar pernyataan perubahan pada dokumen
+  // pendukung. Disimpan apa adanya sebagai jejak.
+  rincian          Json?
 
-  medan     MedanEkstraksi[]
-  createdAt DateTime         @default(now())
+  medan       MedanEkstraksi[]
+  pemakaianAi PemakaianAI[]
+  createdAt   DateTime         @default(now())
 
+  @@index([dokumenId])
   @@map("ekstraksi")
 }
 
-// Kelompok medan mengikuti struktur dokumen kontrak Pertamina.
+// Kelompok medan mengikuti struktur dokumen kontrak Pertamina. PENDUKUNG dan
+// AMANDEMEN dipakai untuk fakta yang dibaca dari dokumen jenis itu.
 enum KelompokMedan {
   POKOK_PERJANJIAN
   LAMPIRAN_B
   LAMPIRAN_C
   LAMPIRAN_D
+  PENDUKUNG
+  AMANDEMEN
 }
 
 model MedanEkstraksi {
@@ -116,10 +401,12 @@ model MedanEkstraksi {
 
   // Medan bernilai uang atau tanggal kritis wajib dikonfirmasi manusia
   // sebelum kontrak boleh disimpan ke repositori.
-  wajibKonfirmasi Boolean   @default(false)
-  dikonfirmasi    Boolean   @default(false)
-  dikonfirmasiPada DateTime?
-  nilaiSuntingan  String?
+  wajibKonfirmasi    Boolean   @default(false)
+  dikonfirmasi       Boolean   @default(false)
+  dikonfirmasiPada   DateTime?
+  dikonfirmasiOleh   Pengguna? @relation("MedanDikonfirmasiOleh", fields: [dikonfirmasiOlehId], references: [id])
+  dikonfirmasiOlehId String?
+  nilaiSuntingan     String?
 
   sorotan Sorotan[]
 
@@ -127,13 +414,19 @@ model MedanEkstraksi {
   @@map("medan_ekstraksi")
 }
 
-// Kotak batas hasil pencocokan nilai ke daftar kata pada PDF.
-// Koordinat disimpan dalam satuan titik PDF, titik asal di kiri bawah,
-// sehingga bebas dari skala tampilan di peramban.
+// Kotak batas hasil pencocokan nilai ke daftar kata pada PDF. Terikat ke satu
+// medan ekstraksi ATAU satu temuan validasi (aturan di migrasi).
+//
+// Koordinat disimpan dalam satuan titik PDF, titik asal di kiri atas, sehingga
+// bebas dari skala tampilan di peramban.
 model Sorotan {
-  id      String         @id @default(cuid())
-  medan   MedanEkstraksi @relation(fields: [medanId], references: [id], onDelete: Cascade)
-  medanId String
+  id        String          @id @default(cuid())
+  medan     MedanEkstraksi? @relation(fields: [medanId], references: [id], onDelete: Cascade)
+  medanId   String?
+  temuan    Temuan?         @relation(fields: [temuanId], references: [id], onDelete: Cascade)
+  temuanId  String?
+  dokumen   Dokumen         @relation(fields: [dokumenId], references: [id], onDelete: Cascade)
+  dokumenId String
 
   halaman Int
   x       Float
@@ -141,55 +434,205 @@ model Sorotan {
   lebar   Float
   tinggi  Float
 
+  @@index([medanId])
+  @@index([temuanId])
+  @@index([dokumenId])
   @@map("sorotan")
 }
 
-// ---------------------------------------------------- pelaksanaan kontrak
+// ================================================================ validasi
 
-enum StatusTermin {
-  MENUNGGU
-  JATUH_TEMPO
-  DIBAYAR
+enum StatusValidasi {
+  BERJALAN
+  SELESAI
+  GAGAL
 }
 
-model Termin {
-  id        String   @id @default(cuid())
-  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+enum HasilValidasi {
+  VALID
+  BELUM_VALID
+}
+
+// Satu baris per kali validasi. urutan 2 dan seterusnya adalah validasi ulang.
+model Validasi {
+  id        String  @id @default(cuid())
+  kontrak   Kontrak @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
   kontrakId String
 
-  urutan     Int
-  nilai      Decimal      @db.Decimal(18, 2)
-  syarat     String
-  jatuhTempo DateTime
-  status     StatusTermin @default(MENUNGGU)
+  urutan           Int
+  status           StatusValidasi @default(BERJALAN)
+  hasil            HasilValidasi?
+  model            String?
+  dijalankanOleh   Pengguna?      @relation("ValidasiDijalankanOleh", fields: [dijalankanOlehId], references: [id])
+  dijalankanOlehId String?
+  mulaiPada        DateTime       @default(now())
+  selesaiPada      DateTime?
+  galat            String?
+  // Daftar pemeriksaan yang dijalankan beserta hasilnya (lulus, temuan, atau
+  // dilewati karena datanya tidak ada), jumlah temuan, dan model yang dipakai.
+  ringkasan        Json?
+
+  penggunaanDokumen PenggunaanDokumen[]
+  temuan            Temuan[]
+  pemakaianAi       PemakaianAI[]
 
   @@unique([kontrakId, urutan])
-  @@map("termin")
+  @@map("validasi")
 }
 
+enum LabelDokumen {
+  // Dokumen utama tidak ditampilkan dengan label.
+  UTAMA
+  KOMPLEMENTER
+  DIGANTIKAN
+}
+
+// Peran setiap dokumen dalam satu kali validasi. Dua dokumen sejenis tidak
+// saling menggugurkan: yang dilihat substansinya, bukan tanggalnya.
+//
+// Aturan di migrasi: digantikanOlehId wajib terisi tepat bila label DIGANTIKAN.
+model PenggunaanDokumen {
+  id         String   @id @default(cuid())
+  validasi   Validasi @relation(fields: [validasiId], references: [id], onDelete: Cascade)
+  validasiId String
+  dokumen    Dokumen  @relation("PenggunaanDokumen", fields: [dokumenId], references: [id], onDelete: Cascade)
+  dokumenId  String
+
+  label            LabelDokumen
+  // Cascade, bukan SetNull: aturan di migrasi mewajibkan label DIGANTIKAN
+  // menyebut penggantinya. Baris "A diganti B" tidak boleh bertahan tanpa B.
+  digantikanOleh   Dokumen?     @relation("DokumenPengganti", fields: [digantikanOlehId], references: [id], onDelete: Cascade)
+  digantikanOlehId String?
+  alasan           String?
+
+  @@unique([validasiId, dokumenId])
+  @@map("penggunaan_dokumen")
+}
+
+enum TingkatTemuan {
+  MERAH
+  KUNING
+}
+
+enum KeputusanTemuan {
+  BELUM
+  DITERIMA
+  DIUBAH
+  DIABAIKAN
+}
+
+// Satu temuan hasil validasi. Keputusan pengguna dicatat di baris yang sama,
+// lengkap dengan siapa dan kapan.
+//
+// Aturan di migrasi: temuan yang diabaikan wajib punya alasan, dan temuan
+// yang sudah diputuskan wajib punya waktu keputusan.
+model Temuan {
+  id         String   @id @default(cuid())
+  validasi   Validasi @relation(fields: [validasiId], references: [id], onDelete: Cascade)
+  validasiId String
+
+  nomor          Int
+  tingkat        TingkatTemuan
+  // Kode aturan tetap, misalnya JAMINAN_MPP30. Kosong untuk temuan dari
+  // pemeriksaan klausul oleh AI.
+  kodeAturan     String?
+  lokasi         String?
+  uraian         String
+  nilaiDiKontrak String?
+  nilaiSaran     String?
+  // Butir checklist atau dokumen pendukung yang menjadi dasar temuan.
+  dasar          String?
+
+  keputusan        KeputusanTemuan @default(BELUM)
+  nilaiKeputusan   String?
+  alasanKeputusan  String?
+  diputuskanOleh   Pengguna?       @relation("TemuanDiputuskanOleh", fields: [diputuskanOlehId], references: [id])
+  diputuskanOlehId String?
+  diputuskanPada   DateTime?
+
+  sorotan Sorotan[]
+
+  @@unique([validasiId, nomor])
+  @@index([validasiId, tingkat])
+  @@map("temuan")
+}
+
+// ================================================================ amendemen
+
+enum JenisPerubahan {
+  LINGKUP
+  VOLUME
+  JANGKA_WAKTU
+  HARGA
+}
+
+// Satu baris per versi. versi 0 adalah kontrak awal dan tidak disimpan di sini.
+// Satu amendemen bisa mengubah lebih dari satu hal, jadi jenisPerubahan berupa
+// daftar.
 model Amendemen {
-  id        String   @id @default(cuid())
-  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  kontrak   Kontrak @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
   kontrakId String
 
-  versi     Int
-  tanggal   DateTime
-  ringkasan String
-  aktif     Boolean  @default(false)
+  versi               Int
+  nomor               String?
+  tanggal             DateTime
+  jenisPerubahan      JenisPerubahan[] @default([])
+  // Selisih nilai terhadap versi sebelumnya. Boleh negatif (tambah kurang).
+  nilaiAmandemen      Decimal?         @db.Decimal(18, 2)
+  // Nilai kontrak total sesudah amendemen ini (KT = KA + seluruh NA).
+  nilaiKontrakSetelah Decimal?         @db.Decimal(18, 2)
+  tanggalBerakhirBaru DateTime?
+  ringkasan           String
+  // Hasil perbandingan dengan versi sebelumnya, dibuat sekali saat amendemen
+  // diunggah lalu disimpan, supaya membuka halamannya tidak memanggil AI lagi.
+  hasilPerbandingan   Json?
+  aktif               Boolean          @default(false)
+
+  dibuatOleh   Pengguna? @relation("AmendemenDibuatOleh", fields: [dibuatOlehId], references: [id])
+  dibuatOlehId String?
+  createdAt    DateTime  @default(now())
+
+  dokumen     Dokumen[]
+  pemakaianAi PemakaianAI[]
 
   @@unique([kontrakId, versi])
   @@map("amendemen")
 }
 
-model Progres {
-  id        String   @id @default(cuid())
-  kontrak   Kontrak  @relation(fields: [kontrakId], references: [id], onDelete: Cascade)
-  kontrakId String
+// ================================================================ biaya AI
 
-  tanggal     DateTime
-  keterangan  String
-  selesai     Boolean  @default(false)
-  persenTotal Int?
+enum ProsesAI {
+  EKSTRAKSI
+  VALIDASI
+  AMANDEMEN
+  PERBANDINGAN
+}
 
-  @@map("progres")
+// Catatan pemakaian AI, untuk mencocokkan biaya nyata dengan RAB.
+// biayaUsd kosong bila harga model tidak diketahui. Beda artinya dengan 0.
+//
+// Aturan di migrasi: paling banyak satu dari validasiId, ekstraksiId, dan
+// amendemenId yang terisi.
+model PemakaianAI {
+  id          String   @id @default(cuid())
+  proses      ProsesAI
+  model       String
+  tokenMasuk  Int
+  tokenKeluar Int
+  biayaUsd    Decimal? @db.Decimal(12, 6)
+
+  validasi    Validasi?  @relation(fields: [validasiId], references: [id], onDelete: SetNull)
+  validasiId  String?
+  ekstraksi   Ekstraksi? @relation(fields: [ekstraksiId], references: [id], onDelete: SetNull)
+  ekstraksiId String?
+  amendemen   Amendemen? @relation(fields: [amendemenId], references: [id], onDelete: SetNull)
+  amendemenId String?
+
+  oleh           Pengguna? @relation("PemakaianAiOleh", fields: [olehPenggunaId], references: [id])
+  olehPenggunaId String?
+  waktu          DateTime  @default(now())
+
+  @@index([proses, waktu])
+  @@map("pemakaian_ai")
 }

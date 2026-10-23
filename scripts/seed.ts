@@ -5,8 +5,13 @@
 // dan membersihkan baris turunan lebih dulu.
 //
 // Jalankan: npx tsx --env-file=.env.local scripts/seed.ts
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { analisisBerkas } from "../src/lib/dokumen/unggah";
+import { simpanBerkas } from "../src/lib/penyimpanan";
 import { prisma } from "../src/lib/prisma";
 
+const BERKAS_CONTOH = "KTR-2026-0142-Pemeliharaan-Terminal-BBM-Balikpapan.pdf";
 const NOMOR = "KTR/2026/0142";
 const NILAI = 4_850_000_000;
 
@@ -51,8 +56,7 @@ async function main() {
       nama: "PT Sumber Jaya Abadi",
       npwp: "02.345.678.9-091.000",
       alamat: "Jalan Cendana No. 45, Samarinda, Kalimantan Timur",
-      klasifikasi: "Pemeliharaan terminal dan jasa penunjang",
-      terdaftarSejak: 2021,
+      golonganUsaha: "MENENGAH",
     },
   });
 
@@ -65,14 +69,33 @@ async function main() {
       status: "BERJALAN",
       vendorId: vendor.id,
       nilaiKontrak: NILAI,
-      komitmenTkdn: 42,
-      tarifDendaHarian: "1/1000 dari nilai kontrak per hari",
-      batasMaksDenda: 5,
-      jumlahTermin: TERMIN.length,
+      termasukPpn: true,
+      komitmenTkdnPersen: 42,
+      tarifDendaPermil: 1,
+      batasDendaPersen: 5,
       tanggalMulai: new Date("2026-03-15T00:00:00Z"),
       tanggalBerakhir: new Date("2026-09-12T00:00:00Z"),
-      namaBerkas: "KTR-2026-0142-Pemeliharaan-Terminal-BBM-Balikpapan.pdf",
-      jumlahHalaman: 24,
+    },
+  });
+
+  // PDF sintetisnya disimpan ke folder data dan dicatat sebagai dokumen
+  // kontrak, supaya halaman detail dan rute berkas bekerja seperti pada
+  // kontrak yang diunggah sungguhan.
+  const data = new Uint8Array(readFileSync(path.resolve("public", "contoh", BERKAS_CONTOH)));
+  const analisis = await analisisBerkas(data);
+  const lokasi = await simpanBerkas(data, analisis.sidik);
+  await prisma.dokumen.upsert({
+    where: { kontrakId_hashSha256: { kontrakId: kontrak.id, hashSha256: analisis.sidik } },
+    update: {},
+    create: {
+      kontrakId: kontrak.id,
+      jenis: "KONTRAK",
+      namaBerkas: BERKAS_CONTOH,
+      lokasiSimpan: lokasi,
+      hashSha256: analisis.sidik,
+      ukuranByte: analisis.ukuranByte,
+      jumlahHalaman: analisis.jumlahHalaman,
+      adaLapisanTeks: analisis.adaLapisanTeks,
     },
   });
 

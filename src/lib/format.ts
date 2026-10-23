@@ -72,3 +72,16 @@ export function persen(nilai: number, pecahan = 0): string {
     maximumFractionDigits: pecahan,
   })}%`;
 }
+
+/**
+ * Tarif denda per hari dari permil menjadi kalimat seperti pada kontrak.
+ * 1 permil menjadi "1/1000 dari nilai kontrak per hari", 0,5 menjadi "1/2000 ...".
+ */
+export function tarifPermilKeTeks(permil: number | null | undefined): string {
+  if (permil === null || permil === undefined || !(permil > 0)) return "-";
+  const penyebut = 1000 / permil;
+  if (Number.isInteger(Math.round(penyebut * 1000) / 1000) && Math.abs(penyebut - Math.round(penyebut)) < 1e-9) {
+    return `1/${Math.round(penyebut)} dari nilai kontrak per hari`;
+  }
+  return `${permil.toLocaleString("id-ID")} permil dari nilai kontrak per hari`;
+}

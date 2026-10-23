@@ -4,6 +4,8 @@
 // tiap penyedia. Kalau keduanya berbeda antar penyedia, hasil ekstraksinya
 // tidak bisa dibandingkan secara adil, dan uji akurasi kehilangan artinya.
 
+import { z } from "zod";
+
 import { MEDAN } from "../medan";
 
 import type { TerminMentah } from "../termin";
@@ -119,4 +121,29 @@ export function rapikan(mentah: unknown): KeluaranModel {
     }));
 
   return { medan, termin };
+}
+
+// Skema Zod disusun dari katalog medan yang sama dengan skema JSON pada
+// penyedia lain, sehingga kedua jalur meminta bentuk keluaran yang identik.
+export function skemaZod() {
+  const bentuk: Record<string, z.ZodTypeAny> = {};
+  for (const m of MEDAN) {
+    bentuk[m.kunci] = z
+      .string()
+      .nullable()
+      .describe(`${m.label}. ${m.petunjuk} Kembalikan null bila tidak tercantum.`);
+  }
+  // Daftar termin, bentuknya harus sama dengan skema JSON pada penyedia lain
+  // supaya kedua jalur meminta keluaran yang identik.
+  bentuk.termin = z
+    .array(
+      z.object({
+        urutan: z.number().int().describe("Nomor termin, mulai dari 1."),
+        nilai: z.string().nullable().describe("Nominal termin apa adanya, contoh Rp1.455.000.000."),
+        syarat: z.string().nullable().describe("Peristiwa yang memicu pembayaran termin ini."),
+        jatuh_tempo: z.string().nullable().describe("Tanggal jatuh tempo apa adanya, contoh 25 Mei 2026."),
+      })
+    )
+    .describe("Daftar termin pembayaran dari lampiran tata cara pembayaran, berurutan.");
+  return z.object(bentuk);
 }

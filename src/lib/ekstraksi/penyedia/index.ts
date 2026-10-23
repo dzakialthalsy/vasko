@@ -5,11 +5,15 @@
 //
 //   EKSTRAKSI_PENYEDIA=openrouter   gratis, HANYA untuk dokumen sintetis
 //   EKSTRAKSI_PENYEDIA=anthropic    berbayar, untuk dokumen sungguhan
+//   EKSTRAKSI_PENYEDIA=openai       berbayar, untuk dokumen sungguhan
+//                                   (pilihan tim: GPT-6 Luna, lewat OPENAI_MODEL)
 //
 // Bila tidak diisi, penyedia dipilih dari kunci API yang tersedia, dengan
 // OpenRouter didahulukan karena itu jalur tanpa biaya.
 
+import { buatKlienOpenAIDariEnv } from "@/lib/ai/klien-openai";
 import { buatPenyediaAnthropic } from "./anthropic";
+import { buatPenyediaDariKlien } from "./dari-klien";
 import { buatPenyediaOpenRouter } from "./openrouter";
 import type { Penyedia } from "./bersama";
 
@@ -20,9 +24,10 @@ export function pilihPenyedia(): Penyedia {
 
   if (pilihan === "openrouter") return buatPenyediaOpenRouter();
   if (pilihan === "anthropic") return buatPenyediaAnthropic();
+  if (pilihan === "openai") return buatPenyediaDariKlien(buatKlienOpenAIDariEnv());
   if (pilihan !== "") {
     throw new Error(
-      `EKSTRAKSI_PENYEDIA bernilai "${pilihan}", yang tidak dikenal. Isi dengan openrouter atau anthropic.`
+      `EKSTRAKSI_PENYEDIA bernilai "${pilihan}", yang tidak dikenal. Isi dengan openrouter, anthropic, atau openai.`
     );
   }
 

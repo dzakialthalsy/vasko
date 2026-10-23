@@ -70,8 +70,25 @@ async function main() {
   let tepat = 0;
   let dekat = 0;
   let bersorot = 0;
+  let total = 0;
+  let baruTanpaSorotan = 0;
   for (const m of h.medan) {
-    const harap = kunci[m.kunci];
+    const harap: string | undefined = kunci[m.kunci];
+
+    // Medan yang ditambahkan sesudah kunci ini ditulis berisi frasa dari pasal,
+    // bukan nilai pendek, dan hasil tafsirannya yang penting. Itu diperiksa di
+    // scripts/uji-live.ts terhadap baris kontrak yang tersimpan.
+    if (harap === undefined) {
+      console.log(`  BARU  ${m.label.padEnd(22)} ${(m.keyakinan * 100).toFixed(0).padStart(3)}%  hal ${String(m.halaman ?? "-").padStart(2)}  ${JSON.stringify(m.nilai)}`);
+      // Tetap wajib punya sorotan bila berisi nilai.
+      if (m.nilai && !(m.kotak.length > 0 && m.halaman !== null)) {
+        console.log("         nilai ada tetapi sorotan tidak terpasang");
+        baruTanpaSorotan++;
+      }
+      continue;
+    }
+
+    total++;
     const tingkat = nilaiKecocokan(m.nilai, harap);
     const sorotOk = m.kotak.length > 0 && m.halaman !== null;
     if (tingkat === "TEPAT") tepat++;
@@ -88,7 +105,6 @@ async function main() {
     if (tingkat !== "TEPAT") console.log(`         harap: ${JSON.stringify(harap)}`);
   }
 
-  const total = h.medan.length;
   const wajib = h.medan.filter((m) => m.wajibKonfirmasi).length;
   console.log(`\nTepat              : ${tepat}/${total} medan`);
   console.log(`Dekat tapi meleset : ${dekat}/${total} medan`);
@@ -143,7 +159,7 @@ async function main() {
     console.log(`  ${ok ? "OK   " : "GAGAL"} ${nama.padEnd(40)} ${catatan}`);
   }
 
-  const lulus = tepat === total && bersorot === total && gagalTermin === 0;
+  const lulus = tepat === total && bersorot === total && baruTanpaSorotan === 0 && gagalTermin === 0;
   console.log(lulus ? "\nUji akurasi ekstraksi LULUS." : "\nUji akurasi ekstraksi GAGAL.");
   process.exit(lulus ? 0 : 1);
 }

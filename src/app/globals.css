@@ -32,6 +32,8 @@
   --color-line: #e8efee;
   --color-muted: #91a1ac;
 
+  /* Warna sidebar TIDAK ditaruh di sini. Lihat blok :root di bawah. */
+
   --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 }
@@ -52,4 +54,21 @@ body {
    menyelinap ke bawah sidebar. */
 :root {
   --sidebar-w: 224px;
+
+  /* Warna sidebar. Untuk menggantinya, cukup ubah ketiga nilai di sini.
+     Ditaruh di :root biasa, BUKAN di @theme, karena Tailwind memangkas token
+     @theme yang belum dirujuk utilitas apa pun, dan variabelnya lalu hilang
+     dari CSS. Sidebar juga sudah memakai pola gaya sebaris untuk --sidebar-w,
+     jadi ini konsisten dengan berkas komponennya.
+
+     Navy sengaja tidak dipakai lagi di sini. Token navy dirujuk 69 kali
+     sebagai warna judul dan teks utama, jadi mengubahnya akan ikut mewarnai
+     seluruh teks aplikasi.
+
+     Indikator TIDAK memakai teal tua #006a6a. Di atas latar maroon kontrasnya
+     hanya 1,56 banding 1, praktis tidak terlihat. Teal muda mencapai 6,08
+     banding 1 dan tetap satu keluarga warna. */
+  --sidebar-bg: #7a1f3d;
+  --sidebar-aktif: #94284a;
+  --sidebar-indikator: #7fd8d8;
 }

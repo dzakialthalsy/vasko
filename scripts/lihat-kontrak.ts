@@ -10,7 +10,12 @@ async function main() {
     where: { nomor },
     include: {
       vendor: true,
-      ekstraksi: { include: { medan: true }, orderBy: { createdAt: "desc" }, take: 1 },
+      dokumen: {
+        where: { jenis: "KONTRAK" },
+        orderBy: { diunggahPada: "desc" },
+        take: 1,
+        include: { ekstraksi: { include: { medan: true }, orderBy: { createdAt: "desc" }, take: 1 } },
+      },
     },
   });
 
@@ -26,13 +31,18 @@ async function main() {
   console.log(`vendorId       : ${k.vendorId ?? "(kosong)"}`);
   console.log(`vendor         : ${k.vendor?.nama ?? "(kosong)"}`);
   console.log(`nilaiKontrak   : ${k.nilaiKontrak?.toString() ?? "(kosong)"}`);
-  console.log(`komitmenTkdn   : ${k.komitmenTkdn?.toString() ?? "(kosong)"}`);
-  console.log(`batasMaksDenda : ${k.batasMaksDenda?.toString() ?? "(kosong)"}`);
-  console.log(`jumlahTermin   : ${k.jumlahTermin ?? "(kosong)"}`);
+  console.log(`termasukPpn    : ${k.termasukPpn ?? "(kosong)"}`);
+  console.log(`komitmenTkdn % : ${k.komitmenTkdnPersen?.toString() ?? "(kosong)"}`);
+  console.log(`tarifDenda /mil: ${k.tarifDendaPermil?.toString() ?? "(kosong)"}`);
+  console.log(`batasDenda %   : ${k.batasDendaPersen?.toString() ?? "(kosong)"}`);
+  console.log(`nilaiJaminan   : ${k.nilaiJaminan?.toString() ?? "(kosong)"}`);
+  console.log(`jaminanSampai  : ${k.jaminanBerlakuSampai?.toISOString() ?? "(kosong)"}`);
+  console.log(`masaPemelihara : ${k.masaPemeliharaanHari ?? "(kosong)"}`);
+  console.log(`statusValidasi : ${k.statusValidasi}`);
   console.log(`tanggalMulai   : ${k.tanggalMulai?.toISOString() ?? "(kosong)"}`);
   console.log(`tanggalBerakhir: ${k.tanggalBerakhir?.toISOString() ?? "(kosong)"}`);
   console.log("\nmedan hasil ekstraksi terakhir:");
-  for (const m of k.ekstraksi[0]?.medan ?? []) {
+  for (const m of k.dokumen[0]?.ekstraksi[0]?.medan ?? []) {
     console.log(
       `  ${m.kunci.padEnd(22)} ${m.dikonfirmasi ? "terkonfirmasi" : "belum        "} ${JSON.stringify(m.nilai)}`
     );
