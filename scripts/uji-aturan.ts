@@ -33,6 +33,7 @@ import { periksaTermin } from "../src/lib/ekstraksi/termin";
 import { bacaKata } from "../src/lib/pdf/kata";
 import { bacaBerkas, simpanBerkas, sidikSha256 } from "../src/lib/penyimpanan";
 import {
+  deteksiIsianTemplate,
   deteksiLampiran,
   jalankanAturan,
   type FaktaDokumen,
@@ -252,11 +253,49 @@ async function main() {
   sama("judul LAMPIRAN B: terdeteksi", deteksiLampiran("PASAL 1 ... LAMPIRAN A: KETENTUAN UMUM ... LAMPIRAN B: LINGKUP ... LAMPIRAN D: JANGKA WAKTU"), ["A", "B", "D"]);
   sama("kalimat rujukan tidak dianggap lampiran ada", deteksiLampiran("sebagaimana dirinci pada Lampiran B dan Lampiran C"), []);
   sama("urutan hasil selalu A sampai G", deteksiLampiran("LAMPIRAN G: x LAMPIRAN A: y"), ["A", "G"]);
+  sama(
+    "kepala halaman template OCLC terdeteksi tanpa titik dua",
+    deteksiLampiran("=== Halaman 1 ===\nModel OCLC 01 Lampiran A 1 Office of Legal Counsel\n\n=== Halaman 2 ===\nLampiran C Judul PARAF PARAF LAMPIRAN C HARGA KONTRAK"),
+    ["A", "C"]
+  );
+  sama(
+    "daftar lampiran di Pokok-Pokok Perjanjian tidak dihitung",
+    deteksiLampiran("=== Halaman 1 ===\nJudul Pekerjaan PARAF 1. A. Lampiran A : Syarat-syarat B. Lampiran B : Lingkup Pekerjaan"),
+    []
+  );
+  sama("Lampiran A-1 bukan Lampiran A", deteksiLampiran("=== Halaman 1 ===\nLampiran A-1 Pengecualian Lampiran A"), []);
+  sama("nama berkas Lampiran C.pdf tidak dihitung", deteksiLampiran("##### Dokumen: Lampiran C.pdf\n=== Halaman 1 ===\nPOKOK-POKOK PERJANJIAN"), []);
+  sama("rujukan di awal halaman tanpa kepala tidak dihitung", deteksiLampiran("=== Halaman 3 ===\nsebagaimana diatur dalam Lampiran D."), []);
+
+  console.log("\nIsian template yang tertinggal");
+  sama(
+    "isian berkurung dan persentase kosong tertangkap beserta halamannya",
+    deteksiIsianTemplate("=== Halaman 1 ===\nadalah sebesar (nilai kontrak) ( terbilang ) belum termasuk\n\n=== Halaman 2 ===\nJaminan sebesar ….% (….. persen) dari HARGA KONTRAK"),
+    ['"(nilai kontrak)" (halaman 1)', '"( terbilang )" (halaman 1)', '"….%" (halaman 2)', '"(….. persen)" (halaman 2)']
+  );
+  sama("tanggal kosong tertangkap", deteksiIsianTemplate("ditandatangani pada tanggal .… bulan ……….….. tahun 2022").length, 2);
+  sama("bunyi yang sama hanya dicatat sekali", deteksiIsianTemplate("(Jabatan) dan (Jabatan) serta (jabatan)").length, 1);
+  sama(
+    "teks kontrak yang sudah lengkap tidak tertangkap",
+    deteksiIsianTemplate("Jaminan sebesar 5% (lima persen). Nilai Rp1.087.500.000. Pasal 2.1. 30% prestasi. Lihat Lampiran C. PT X (\"KONTRAKTOR\")"),
+    []
+  );
+  {
+    const k = (isianTemplate?: string[]) => jalankanAturan(masukan(kontrak0142({ isianTemplate })));
+    sama("isian template: teks tidak dibaca dilewati", status(k(undefined), "ISIAN_TEMPLATE"), "DILEWATI");
+    sama("isian template: tidak ada isian lulus", status(k([]), "ISIAN_TEMPLATE"), "LULUS");
+    const t = k(['"(nilai kontrak)" (halaman 1)']).temuan.find((x) => x.kode === "ISIAN_TEMPLATE");
+    cek("isian template: ada isian jadi kuning dan disebut", t?.tingkat === "KUNING" && t.uraian.includes("(nilai kontrak)"), t?.uraian);
+  }
 
   // ================================================ PDF sungguhan
   console.log("\nKontrak sintetis: deteksi lampiran dan pasal dari PDF sungguhan");
   const kontrakPdf = await muatPdf("KTR-2026-0142-Pemeliharaan-Terminal-BBM-Balikpapan.pdf");
   sama("lampiran yang ada di KTR/2026/0142 adalah A, B, C, D", deteksiLampiran(kontrakPdf.teks), ["A", "B", "C", "D"]);
+  sama("KTR/2026/0142 tidak memuat isian template", deteksiIsianTemplate(kontrakPdf.teks), []);
+  const oclcPdf = await muatPdf("KTR-2026-0187-Pemeliharaan-Perpipaan-FT-Samarinda.pdf");
+  sama("KTR/2026/0187 (format OCLC 01): lampiran F sengaja tidak ada", deteksiLampiran(oclcPdf.teks), ["A", "B", "C", "D", "E", "G"]);
+  sama("KTR/2026/0187: tiga isian template yang ditanam tertangkap", deteksiIsianTemplate(oclcPdf.teks).length, 3);
   const pasal7 = ambilPasal(kontrakPdf.teks, "Pasal 7");
   cek("Pasal 7 diambil sampai sebelum Pasal 8", !!pasal7 && pasal7.includes("12 September 2026") && !pasal7.includes("PASAL 8"), pasal7?.slice(0, 120));
   cek("pasal yang tidak ada menghasilkan null", ambilPasal(kontrakPdf.teks, "Pasal 99") === null);

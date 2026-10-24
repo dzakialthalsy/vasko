@@ -1,0 +1,64 @@
+{
+  "medan": {
+    "nomor_kontrak": "KTR/2026/0187",
+    "nama_vendor": "PT Mitra Rekayasa Borneo",
+    "nilai_kontrak": "Rp7.250.000.000",
+    "nilai_termasuk_ppn": "belum termasuk Pajak Pertambahan Nilai (PPN)",
+    "nilai_jaminan_pelaksanaan": "5% (lima persen) dari HARGA KONTRAK",
+    "masa_berlaku_jaminan": "selama MASA PENYELESAIAN PEKERJAAN sesuai yang ditetapkan pada Lampiran D KONTRAK ini, ditambah sekurang-kurangnya 14 (empat belas) HARI KALENDER",
+    "lingkup_pekerjaan": "Pemeliharaan Perpipaan Fuel Terminal Samarinda",
+    "komitmen_tkdn": "35%",
+    "tarif_denda_harian": "1/1000 (satu per seribu) dari HARGA KONTRAK untuk setiap HARI KALENDER keterlambatan",
+    "batas_maksimum_denda": "5% (lima persen) dari HARGA KONTRAK",
+    "dasar_perhitungan_denda": "dihitung dari HARGA KONTRAK yang sudah termasuk Pajak Pertambahan Nilai",
+    "jumlah_termin": "4 termin",
+    "tanggal_mulai": "2 Maret 2026",
+    "tanggal_berakhir": "31 Agustus 2026",
+    "masa_pemeliharaan": "90 (sembilan puluh) HARI KALENDER"
+  },
+  "termin": [
+    {
+      "urutan": 1,
+      "nilai": "Rp2.175.000.000",
+      "jatuh_tempo": "30 April 2026"
+    },
+    {
+      "urutan": 2,
+      "nilai": "Rp2.175.000.000",
+      "jatuh_tempo": "30 Juni 2026"
+    },
+    {
+      "urutan": 3,
+      "nilai": "Rp1.875.000.000",
+      "jatuh_tempo": "15 September 2026"
+    },
+    {
+      "urutan": 4,
+      "nilai": "Rp1.087.500.000",
+      "jatuh_tempo": "15 Desember 2026"
+    }
+  ],
+  "validasi": {
+    "temuan": {
+      "TERMIN_SAMA_NILAI": "MERAH",
+      "JAMINAN_MPP30": "MERAH",
+      "DENDA_DASAR_PPN": "KUNING",
+      "LAMPIRAN_LENGKAP": "KUNING",
+      "ISIAN_TEMPLATE": "KUNING"
+    },
+    "lulus": [
+      "URUTAN_TANGGAL",
+      "JAMINAN_NILAI",
+      "DENDA_MINIMAL",
+      "DENDA_BATAS_JAMINAN"
+    ],
+    "lampiran_ada": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "G"
+    ]
+  }
+}

@@ -23,6 +23,7 @@
 // Jalankan:
 //   npx tsx --env-file=.env.local scripts/uji-live.ts --live mudah
 //   npx tsx --env-file=.env.local scripts/uji-live.ts --live sulit
+//   npx tsx --env-file=.env.local scripts/uji-live.ts --live oclc
 //   npx tsx --env-file=.env.local scripts/uji-live.ts --live semua
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -87,9 +88,26 @@ const HARAP = {
     mulai: "2026-04-20",
     berakhir: "2026-10-05",
   },
+  // Kontrak berformat template OCLC 01 (dokumen draft kontrak), dengan lima
+  // kesalahan yang ditanam. Lihat scripts/generate_kontrak_oclc.py.
+  oclc: {
+    berkas: "KTR-2026-0187-Pemeliharaan-Perpipaan-FT-Samarinda.pdf",
+    kunci: "KTR-2026-0187.kunci.json",
+    termasukPpn: false,
+    nilaiJaminan: 362_500_000, // 5% dari Rp7.250.000.000
+    jaminanSampai: "2026-09-14" as string | null, // MPP ditambah 14 hari kalender
+    pemeliharaanHari: 90 as number | null,
+    tkdn: 35,
+    tarifPermil: 1,
+    batasDenda: 5,
+    mulai: "2026-03-02",
+    berakhir: "2026-08-31",
+  },
 } as const;
 
-async function ujiBacaKontrak(set: "mudah" | "sulit", penggunaId: string): Promise<string | null> {
+type Set = keyof typeof HARAP;
+
+async function ujiBacaKontrak(set: Set, penggunaId: string): Promise<string> {
   const h = HARAP[set];
   const kunci = JSON.parse(readFileSync(path.join(DIR_CONTOH, h.kunci), "utf8")) as Kunci;
   console.log(`\nBaca kontrak ${set} (${h.berkas})`);
@@ -169,7 +187,37 @@ async function ujiBacaKontrak(set: "mudah" | "sulit", penggunaId: string): Promi
   const berNilai = hasil.medan.filter((m) => m.nilai).length;
   cek("setiap medan yang berisi punya sorotan di PDF", sorotan >= berNilai, `${sorotan} sorotan untuk ${berNilai} medan berisi`, false);
 
-  return set === "mudah" ? simpan.kontrakId : null;
+  return simpan.kontrakId;
+}
+
+/**
+ * Validasi kontrak OCLC tanpa dokumen pendukung. Tidak ada panggilan model di
+ * sini: seluruh temuan berasal dari aturan kode atas hasil baca kontrak tadi.
+ */
+async function ujiValidasiOclc(kontrakId: string, penggunaId: string) {
+  console.log("\nValidasi kontrak OCLC (tanpa dokumen pendukung)");
+  const harap = (JSON.parse(readFileSync(path.join(DIR_CONTOH, HARAP.oclc.kunci), "utf8")) as {
+    validasi: { temuan: Record<string, string>; lulus: string[] };
+  }).validasi;
+  const v = await jalankanValidasi({ kontrakId, klien: pilihKlien(), penggunaId });
+  console.log(`  Hasil ${v.hasil}: ${v.jumlahMerah} merah, ${v.jumlahKuning} kuning.`);
+  for (const t of v.temuan) console.log(`     ${t.nomor}. ${t.tingkat.padEnd(6)} ${t.kode}: ${t.uraian.slice(0, 160)}`);
+  console.log("  Pemeriksaan:");
+  for (const p of v.pemeriksaan) console.log(`     ${p.status.padEnd(8)} ${p.kode}: ${p.catatan.slice(0, 160)}`);
+
+  const dapat = (k: string) => v.temuan.find((t) => t.kode === k)?.tingkat;
+  // Lampiran dan isian template dibaca kode langsung dari teks PDF, jadi pasti.
+  // Sisanya bergantung pada frasa yang disalin model.
+  const pasti = new Set(["LAMPIRAN_LENGKAP", "ISIAN_TEMPLATE"]);
+  for (const [k, tingkat] of Object.entries(harap.temuan)) {
+    cek(`temuan ${k} (${tingkat.toLowerCase()})`, dapat(k) === tingkat, dapat(k) ? `dapat ${dapat(k)}` : "tidak muncul", pasti.has(k));
+  }
+  const lebih = v.temuan.filter((t) => !(t.kode in harap.temuan)).map((t) => t.kode);
+  cek("tidak ada temuan di luar kesalahan yang ditanam", lebih.length === 0, lebih.join(", "), false);
+  for (const k of harap.lulus) {
+    const status = v.pemeriksaan.find((p) => p.kode === k)?.status;
+    cek(`${k} lulus`, status === "LULUS", status ?? "tidak ada", false);
+  }
 }
 
 async function ujiPendukungDanValidasi(kontrakId: string, penggunaId: string) {
@@ -274,7 +322,7 @@ async function main() {
     console.error("Skrip ini memanggil model sungguhan dan memakan kuota. Tambahkan --live untuk melanjutkan.");
     process.exit(2);
   }
-  const tahap = argumen.find((a) => ["mudah", "sulit", "semua"].includes(a)) ?? "mudah";
+  const tahap = argumen.find((a) => ["mudah", "sulit", "oclc", "semua"].includes(a)) ?? "mudah";
 
   // Memastikan penyedia terpilih sebelum apa pun dibuat, supaya galat konfigurasi cepat terlihat.
   const klien = pilihKlien();
@@ -313,6 +361,16 @@ async function main() {
     }
     if (tahap === "sulit" || tahap === "semua") {
       await jalankan("baca kontrak sulit", () => ujiBacaKontrak("sulit", p.id));
+    }
+    if (tahap === "oclc" || tahap === "semua") {
+      let kontrakOclc: string | null = null;
+      await jalankan("baca kontrak OCLC", async () => {
+        kontrakOclc = await ujiBacaKontrak("oclc", p.id);
+      });
+      if (kontrakOclc) {
+        const id: string = kontrakOclc;
+        await jalankan("validasi kontrak OCLC", () => ujiValidasiOclc(id, p.id));
+      }
     }
 
     const total = await prisma.pemakaianAI.aggregate({ _sum: { tokenMasuk: true, tokenKeluar: true, biayaUsd: true }, _count: true });

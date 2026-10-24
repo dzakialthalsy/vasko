@@ -15,7 +15,7 @@ type Peta = Record<string, unknown>;
 export function penangan(p: { nama: string; pengguna: string }): unknown {
   const u = p.pengguna;
 
-  if (p.nama === "medan_kontrak") return jawabanMedanKontrak();
+  if (p.nama === "medan_kontrak") return jawabanMedanKontrak(u);
 
   if (p.nama === "dokumen_pendukung") {
     const kosong = { judul: null, nomor_dokumen: null, fakta: [] as Peta[], pernyataan: [] as Peta[] };
@@ -109,11 +109,23 @@ export function penangan(p: { nama: string; pengguna: string }): unknown {
 }
 
 /** Keluaran ekstraksi kontrak tiruan untuk KTR/2026/0142: kunci jawaban ditambah lima frasa baru. */
-export function jawabanMedanKontrak(): Peta {
-  const kunci = JSON.parse(readFileSync(path.resolve("public", "contoh", "KTR-2026-0142.kunci.json"), "utf8")) as {
-    medan: Record<string, string>;
-    termin: { urutan: number; nilai: string; jatuh_tempo: string }[];
-  };
+export function jawabanMedanKontrak(pengguna = ""): Peta {
+  const muatKunci = (nama: string) =>
+    JSON.parse(readFileSync(path.resolve("public", "contoh", nama), "utf8")) as {
+      medan: Record<string, string>;
+      termin: { urutan: number; nilai: string; jatuh_tempo: string }[];
+    };
+
+  // Kontrak berformat template OCLC 01. Kunci jawabannya sudah memuat seluruh
+  // medan dalam bentuk frasa yang tercetak di PDF, termasuk termin 3 yang
+  // sengaja salah tulis.
+  if (pengguna.includes("KTR/2026/0187")) {
+    const kunci = muatKunci("KTR-2026-0187.kunci.json");
+    const syarat = ["Prestasi fisik 30%", "Prestasi fisik 60%", "BAPP ditandatangani", "Verifikasi TKDN dan BASMP"];
+    return { ...kunci.medan, termin: kunci.termin.map((t, i) => ({ ...t, syarat: syarat[i] })) };
+  }
+
+  const kunci = muatKunci("KTR-2026-0142.kunci.json");
   const syarat = ["Mobilisasi dan Tahap 1", "Pekerjaan Tahap 2", "Serah terima akhir"];
   return {
     ...kunci.medan,

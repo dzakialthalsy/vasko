@@ -30,6 +30,7 @@ import { bacaBerkas } from "@/lib/penyimpanan";
 import { bacaKata } from "@/lib/pdf/kata";
 import { OPSI_TRANSAKSI, prisma } from "@/lib/prisma";
 import {
+  deteksiIsianTemplate,
   deteksiLampiran,
   jalankanAturan,
   type CatatanPemeriksaan,
@@ -244,6 +245,7 @@ async function kerjakan(
       tanggalBerakhir: kontrak.tanggalBerakhir,
       komitmenTkdnPersen: kontrak.komitmenTkdnPersen === null ? null : Number(kontrak.komitmenTkdnPersen),
       lampiranAda: [...lampiranAda].sort(),
+      isianTemplate: deteksiIsianTemplate(teksKontrak),
       termin: periksaTermin(terminTerurai, nilaiKontrak),
       teks,
     },

@@ -13,6 +13,7 @@ import { uraiTanggal, uraiRupiah } from "../src/lib/ekstraksi/urai";
 // dokumen mudah maupun dokumen sulit:
 //   npx tsx --env-file=.env.local scripts/uji-ekstraksi.ts             mudah
 //   npx tsx --env-file=.env.local scripts/uji-ekstraksi.ts sulit       sulit
+//   npx tsx --env-file=.env.local scripts/uji-ekstraksi.ts oclc        format template OCLC 01
 const BERKAS: Record<string, { pdf: string; kunci: string }> = {
   mudah: {
     pdf: "public/contoh/KTR-2026-0142-Pemeliharaan-Terminal-BBM-Balikpapan.pdf",
@@ -21,6 +22,10 @@ const BERKAS: Record<string, { pdf: string; kunci: string }> = {
   sulit: {
     pdf: "public/contoh/KTR-2026-0163-Konstruksi-Tangki-Timbun-Samarinda.pdf",
     kunci: "public/contoh/KTR-2026-0163.kunci.json",
+  },
+  oclc: {
+    pdf: "public/contoh/KTR-2026-0187-Pemeliharaan-Perpipaan-FT-Samarinda.pdf",
+    kunci: "public/contoh/KTR-2026-0187.kunci.json",
   },
 };
 

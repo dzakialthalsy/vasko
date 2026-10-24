@@ -52,6 +52,8 @@ export type FaktaKontrak = {
   komitmenTkdnPersen: number | null;
   /** Huruf lampiran yang terdeteksi ada, A sampai G. */
   lampiranAda: string[];
+  /** Isian template yang tertinggal, dari deteksiIsianTemplate. Tidak diisi bila teks kontrak tidak dibaca. */
+  isianTemplate?: string[];
   /** Hasil pemeriksaan aritmetika termin, dari periksaTermin. */
   termin: PemeriksaanTermin;
   /** Nilai teks tiap medan, untuk ditampilkan pada temuan. */
@@ -417,6 +419,30 @@ const ATURAN: Aturan[] = [
     },
   },
   {
+    kode: "ISIAN_TEMPLATE",
+    nama: "Tidak ada isian template yang tertinggal",
+    periksa: ({ kontrak: k }) => {
+      if (!k.isianTemplate) return { dilewati: "Teks kontrak tidak dibaca." };
+      if (k.isianTemplate.length === 0) return { temuan: [] };
+      const contoh = k.isianTemplate.slice(0, 5);
+      const sisa = k.isianTemplate.length - contoh.length;
+      return {
+        temuan: [
+          {
+            kode: "ISIAN_TEMPLATE",
+            tingkat: "KUNING",
+            lokasi: "Seluruh dokumen kontrak",
+            uraian: `Ada ${k.isianTemplate.length} isian template yang belum diisi: ${contoh.join(", ")}${sisa > 0 ? `, dan ${sisa} lainnya` : ""}.`,
+            nilaiDiKontrak: k.isianTemplate.join("; "),
+            nilaiSaran: "Isi seluruh isian template sebelum kontrak ditandatangani",
+            dasar: "Kelengkapan isian template kontrak Pertamina (Model OCLC)",
+            medanSorotan: [],
+          },
+        ],
+      };
+    },
+  },
+  {
     kode: "TKDN_MINIMUM",
     nama: "Komitmen TKDN tidak lebih rendah dari nilai minimum pada Form TKDN",
     periksa: ({ kontrak: k, fakta }) => {
@@ -623,13 +649,62 @@ export function jalankanAturan(m: MasukanAturan): { temuan: TemuanAturan[]; peme
 }
 
 /**
- * Huruf lampiran yang terdeteksi ada pada teks kontrak. Hanya judul
- * berhuruf besar berpenutup titik dua yang dihitung ("LAMPIRAN B: ..."),
- * supaya kalimat rujukan seperti "sebagaimana dirinci pada Lampiran B" tidak
- * dianggap lampirannya ada.
+ * Huruf lampiran yang terdeteksi ada pada teks kontrak. Dua bentuk dihitung:
+ *
+ * 1. Judul berhuruf besar berpenutup titik dua ("LAMPIRAN B: ..."), bentuk
+ *    yang dipakai kontrak contoh lama.
+ * 2. Kepala halaman template Pertamina (Model OCLC): tiap halaman lampiran
+ *    DIAWALI "Lampiran B", atau "Model OCLC 01 Lampiran A" pada Lampiran A.
+ *    Template tidak memakai titik dua, jadi tanpa bentuk ini seluruh
+ *    lampiran kontrak berformat template tidak terdeteksi.
+ *
+ * Kalimat rujukan seperti "sebagaimana dirinci pada Lampiran B" tidak
+ * dihitung, begitu pula daftar lampiran di Pokok-Pokok Perjanjian
+ * ("A. Lampiran A : Syarat-syarat ..."), karena keduanya tidak berada di
+ * awal halaman dan tidak berhuruf besar semua.
  */
 export function deteksiLampiran(teks: string): string[] {
   const ada = new Set<string>();
   for (const m of teks.matchAll(/\bLAMPIRAN\s+([A-G])\s*:/g)) ada.add(m[1]);
+  // Baris nama berkas dibuang supaya berkas bernama "Lampiran C.pdf" tidak
+  // ikut terhitung. "Lampiran A-1" (pengecualian Lampiran A) bukan Lampiran A.
+  const tanpaNamaBerkas = teks.replace(/^##### .*$/gm, "");
+  for (const halaman of tanpaNamaBerkas.split(/=== Halaman \d+ ===/)) {
+    const m = halaman.match(/^\s*(?:Model\s+OCLC\s+[\d.]+\s+)?Lampiran\s+([A-G])\b(?!\s*-\s*\d)/);
+    if (m) ada.add(m[1]);
+  }
   return SEMUA_LAMPIRAN.filter((l) => ada.has(l));
+}
+
+/**
+ * Isian template Pertamina yang tertinggal di teks kontrak, misalnya
+ * "(nilai kontrak)", "(Fungsi Pemilik Pekerjaan)", "....%" dan
+ * "tanggal .... bulan ....". Daftarnya diambil dari placeholder pada template
+ * Model OCLC di folder dokumen draft kontrak.
+ *
+ * Hanya bentuk yang jelas berupa isian yang dicari, supaya teks kontrak yang
+ * sudah lengkap tidak ikut tertangkap. Mengembalikan kutipan tiap isian
+ * beserta nomor halamannya, paling banyak satu kutipan per bunyi yang sama.
+ */
+export function deteksiIsianTemplate(teks: string): string[] {
+  const POLA = [
+    /\(\s*(?:nilai\s+kontrak|terbilang|judul\s+pekerjaan|nama\s+pimpinan|jabatan|pejabat\s+penandatangan(?:an)?\s+kontrak|lokasi\s+pekerjaan|fungsi\s+pemilik\s+pekerjaan|boq\s+dan\s+lingkup\s+pekerjaan|jangka\s+waktu\s+penyelesaian\s+pekerjaan|mpl\s*\+\s*mpa)\s*\)/gi,
+    // Persentase kosong: "....%" dan "(...... persen)".
+    /[.\u2026](?:\s*[.\u2026]){1,}\s*%/g,
+    /\(\s*[.\u2026](?:\s*[.\u2026]){1,}\s*persen\s*\)/gi,
+    // Tanggal kosong: "tanggal .... bulan ......".
+    /\b(?:tanggal|bulan|tahun)\s*[.\u2026](?:\s*[.\u2026]){1,}/gi,
+  ];
+  const ditemukan = new Map<string, string>();
+  for (const pola of POLA) {
+    for (const m of teks.matchAll(pola)) {
+      const bunyi = m[0].replace(/\s+/g, " ").trim();
+      const kunci = bunyi.toLowerCase().replace(/\s/g, "");
+      if (ditemukan.has(kunci)) continue;
+      const sebelum = teks.slice(0, m.index);
+      const halaman = [...sebelum.matchAll(/=== Halaman (\d+) ===/g)].pop()?.[1];
+      ditemukan.set(kunci, halaman ? `"${bunyi}" (halaman ${halaman})` : `"${bunyi}"`);
+    }
+  }
+  return [...ditemukan.values()];
 }

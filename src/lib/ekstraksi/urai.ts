@@ -177,7 +177,12 @@ export type MasaBerlakuJaminan =
 export function uraiMasaBerlakuJaminan(v: string | null): MasaBerlakuJaminan | null {
   if (!v) return null;
 
-  const relatif = v.match(/(\d+)\s*(?:\([^)]*\)\s*)?(hari|bulan)(?:\s+kalender)?\s+(?:setelah|sesudah|sejak|terhitung\s+sejak)/i);
+  const relatif =
+    v.match(/(\d+)\s*(?:\([^)]*\)\s*)?(hari|bulan)(?:\s+kalender)?\s+(?:setelah|sesudah|sejak|terhitung\s+sejak)/i) ??
+    // Bunyi template Pertamina: "selama MASA PENYELESAIAN PEKERJAAN ...,
+    // ditambah sekurang-kurangnya 30 (tiga puluh) HARI KALENDER". Artinya
+    // sama dengan 30 hari kalender setelah pekerjaan selesai.
+    v.match(/ditambah\s+(?:(?:sekurang\s*-\s*kurangnya|paling\s+sedikit|minimal|minimum)\s+)?(\d+)\s*(?:\([^)]*\)\s*)?(hari|bulan)/i);
   if (relatif) {
     const n = Number(relatif[1]);
     const bulan = relatif[2].toLowerCase() === "bulan";

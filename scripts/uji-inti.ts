@@ -79,6 +79,16 @@ sama(
 );
 const jTanggal = uraiMasaBerlakuJaminan("sampai dengan 12 Oktober 2026");
 cek("jaminan: tanggal mutlak", jTanggal?.jenis === "TANGGAL" && jTanggal.tanggal.toISOString().startsWith("2026-10-12"));
+sama(
+  "jaminan: bunyi template OCLC, MPP ditambah 30 hari",
+  uraiMasaBerlakuJaminan("selama MASA PENYELESAIAN PEKERJAAN sesuai yang ditetapkan pada LAMPIRAN D KONTRAK INI, ditambah sekurang-kurangnya 30 (tiga puluh) HARI KALENDER"),
+  { jenis: "SETELAH_SELESAI", hari: 30, perkiraan: false }
+);
+sama(
+  "jaminan: bunyi template dengan tanda hubung terpisah dari PDF",
+  uraiMasaBerlakuJaminan("selama MASA PENYELESAIAN PEKERJAAN, ditambah sekurang - kurangnya 14 (empat belas) HARI KALENDER"),
+  { jenis: "SETELAH_SELESAI", hari: 14, perkiraan: false }
+);
 sama("jaminan: frasa tak dikenal", uraiMasaBerlakuJaminan("berlaku selama kontrak"), null);
 
 sama("hari dengan terbilang", uraiHari("60 (enam puluh) hari kalender"), 60);
